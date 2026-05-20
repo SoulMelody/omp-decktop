@@ -16,6 +16,8 @@ import * as path from "node:path";
 import type {
 	InstalledPluginInfo,
 	ListSkillsResponse,
+	SkillDetailResponse,
+	SkillFile,
 	SkillFrontmatter,
 	SkillSummary,
 } from "@omp-deck/protocol";
@@ -66,6 +68,44 @@ export class SkillsService {
 		skills.sort((a, b) => a.pluginId.localeCompare(b.pluginId) || a.dirName.localeCompare(b.dirName));
 
 		return { skills, plugins };
+	}
+
+	/**
+	 * Detail for a single skill: SKILL.md body (frontmatter stripped) + the
+	 * tree of co-located files under the skill directory. Returns `undefined`
+	 * when the plugin isn't installed, the skill dir doesn't exist, or its
+	 * SKILL.md is missing. Symlinks and noisy build/vcs dirs are filtered.
+	 */
+	async getSkillDetail(pluginId: string, dirName: string): Promise<SkillDetailResponse | undefined> {
+		const plugins = await this.marketplace.listInstalled();
+		const plugin = plugins.find((p) => p.id === pluginId);
+		if (!plugin) return undefined;
+
+		const skillDir = path.join(plugin.installPath, "skills", dirName);
+		const skillMd = path.join(skillDir, "SKILL.md");
+		let raw: string;
+		try {
+			raw = await readFile(skillMd, "utf8");
+		} catch {
+			return undefined;
+		}
+		const frontmatter = parseSkillFrontmatter(raw, dirName);
+		const body = stripFrontmatter(raw);
+		const files = await walkSkillFiles(skillDir);
+
+		return {
+			id: `${plugin.id}/${dirName}`,
+			pluginId: plugin.id,
+			pluginName: plugin.name,
+			marketplace: plugin.marketplace,
+			scope: plugin.scope,
+			skillPath: skillMd,
+			dirName,
+			frontmatter,
+			enabled: plugin.enabled !== false,
+			body,
+			files,
+		};
 	}
 
 	/**
@@ -166,4 +206,98 @@ function parseInlineYamlArray(value: string): string[] | undefined {
 }
 
 // Re-export for tests / external callers without needing to import the file.
-export type { SkillSummary, SkillFrontmatter, InstalledPluginInfo, ListSkillsResponse };
+export type {
+	SkillSummary,
+	SkillFrontmatter,
+	SkillDetailResponse,
+	SkillFile,
+	InstalledPluginInfo,
+	ListSkillsResponse,
+};
+
+/**
+ * Strip a leading `---\n…\n---\n?` frontmatter block from a SKILL.md body.
+ * Mirrors `parseSkillFrontmatter`'s delimiter detection so the two never
+ * disagree about where the body starts.
+ */
+function stripFrontmatter(text: string): string {
+	if (!text.startsWith("---")) return text;
+	const end = text.indexOf("\n---", 3);
+	if (end < 0) return text;
+	// Skip the closing `---` line, including a trailing newline if present.
+	let cursor = end + 4; // past "\n---"
+	if (text[cursor] === "\r") cursor += 1;
+	if (text[cursor] === "\n") cursor += 1;
+	return text.slice(cursor);
+}
+
+// Cap depth and total entries so a misconfigured plugin (e.g. checked-in
+// node_modules) can't blow up the response. Skill trees are typically a
+// handful of files; 500 entries is generous and bounds the wire size.
+const SKILL_WALK_MAX_ENTRIES = 500;
+const SKILL_WALK_MAX_DEPTH = 6;
+const SKILL_WALK_EXCLUDE = new Set([
+	"node_modules",
+	"__pycache__",
+	".git",
+	".venv",
+	"venv",
+	"dist",
+	"build",
+]);
+
+/**
+ * Recursive walk of the skill directory, returning files + dirs (excluding
+ * SKILL.md itself, symlinks, and noisy build/vcs trees). Caller stops at the
+ * first error — partial trees are still useful, but consistent missing-dir
+ * vs broken-permission semantics aren't worth the complexity right now.
+ */
+async function walkSkillFiles(skillDir: string): Promise<SkillFile[]> {
+	const out: SkillFile[] = [];
+
+	async function recurse(absDir: string, relParent: string, depth: number): Promise<void> {
+		if (out.length >= SKILL_WALK_MAX_ENTRIES) return;
+		if (depth > SKILL_WALK_MAX_DEPTH) return;
+		let entries;
+		try {
+			entries = await readdir(absDir, { withFileTypes: true });
+		} catch (err) {
+			log.warn(`walk: readdir failed at ${absDir}`, err);
+			return;
+		}
+		entries.sort((a, b) => a.name.localeCompare(b.name));
+		for (const entry of entries) {
+			if (out.length >= SKILL_WALK_MAX_ENTRIES) return;
+			if (SKILL_WALK_EXCLUDE.has(entry.name)) continue;
+			if (entry.isSymbolicLink()) continue;
+			const relPath = relParent ? `${relParent}/${entry.name}` : entry.name;
+			const absPath = path.join(absDir, entry.name);
+
+			if (entry.isDirectory()) {
+				out.push({ relPath, name: entry.name, kind: "dir" });
+				await recurse(absPath, relPath, depth + 1);
+				continue;
+			}
+			if (!entry.isFile()) continue;
+			// SKILL.md is rendered separately as `body`; don't list it.
+			if (depth === 0 && entry.name === "SKILL.md") continue;
+			let st;
+			try {
+				st = await stat(absPath);
+			} catch (err) {
+				log.warn(`walk: stat failed at ${absPath}`, err);
+				continue;
+			}
+			out.push({
+				relPath,
+				name: entry.name,
+				kind: "file",
+				size: st.size,
+				mtime: st.mtime.toISOString(),
+			});
+		}
+	}
+
+	await recurse(skillDir, "", 0);
+	return out;
+}

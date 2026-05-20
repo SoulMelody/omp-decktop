@@ -294,6 +294,32 @@ export interface ListSkillsResponse {
 	/** Echo of installed plugins so the UI can render plugin-level chrome. */
 	plugins: InstalledPluginInfo[];
 }
+
+/**
+ * Co-located file under a skill's directory. Listed recursively (depth-first)
+ * with `relPath` carrying the path from the skill dir; the UI groups by
+ * parent. Symlinks and excluded dirs (`node_modules`, `__pycache__`, `.git`)
+ * are filtered server-side.
+ */
+export interface SkillFile {
+	/** Path relative to the skill directory, forward-slash separated. */
+	relPath: string;
+	name: string;
+	kind: "file" | "dir";
+	/** Bytes; omitted for directories. */
+	size?: number;
+	/** ISO timestamp; omitted for directories. */
+	mtime?: string;
+}
+
+/**
+ * Single-skill detail. `body` is the SKILL.md content with the frontmatter
+ * block stripped; consumers re-render with the chat markdown pipeline.
+ */
+export interface SkillDetailResponse extends SkillSummary {
+	body: string;
+	files: SkillFile[];
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // WebSocket frames
 // ─────────────────────────────────────────────────────────────────────────────
