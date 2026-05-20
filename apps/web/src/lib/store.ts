@@ -78,6 +78,14 @@ interface StoreState {
 	 */
 	tasksChangeCounter: number;
 
+	/**
+	 * Mirror of {@link tasksChangeCounter} for the skill catalog. Bumped on every
+	 * `skills_changed` frame (plugin install / uninstall / enable / disable, or
+	 * a SKILL.md mutation under the plugins cache dir). Drives live refetch in
+	 * `SkillsView` without polling.
+	 */
+	skillsChangeCounter: number;
+
 	// ─── Actions ─────────────────────────────────────────────────────────
 	bootstrap(): Promise<void>;
 	connect(): void;
@@ -108,6 +116,7 @@ export const useStore = create<StoreState>()(
 		subscribed: new Set<string>(),
 		toolView: { allCollapsed: false, perCard: {} },
 		tasksChangeCounter: 0,
+		skillsChangeCounter: 0,
 		// Hydrate chrome state from localStorage at module init so first render
 		// matches the user's last preference — but only on desktop. On mobile the
 		// panels are overlay drawers and always start closed.
@@ -301,6 +310,10 @@ function handleFrame(
 
 		case "tasks_changed":
 			set((s) => ({ tasksChangeCounter: s.tasksChangeCounter + 1 }));
+			return;
+
+		case "skills_changed":
+			set((s) => ({ skillsChangeCounter: s.skillsChangeCounter + 1 }));
 			return;
 
 		case "session_disposed":

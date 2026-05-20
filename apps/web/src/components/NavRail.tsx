@@ -1,4 +1,4 @@
-import { Clock, Inbox, KanbanSquare, MessagesSquare, Settings, Store } from "lucide-react";
+import { Clock, Inbox, KanbanSquare, MessagesSquare, Settings, Sparkles, Store } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const ITEMS: ReadonlyArray<{
 	{ to: "/routines", label: "Routines", icon: Clock },
 	{ to: "/inbox", label: "Inbox", icon: Inbox },
 	{ to: "/marketplace", label: "Marketplace", icon: Store },
+	{ to: "/skills", label: "Skills", icon: Sparkles },
 ];
 
 /**
