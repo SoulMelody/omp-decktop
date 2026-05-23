@@ -3,6 +3,23 @@
 All notable changes to omp-deck. The format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Kanban polish
+- Drag-reorder columns via a dedicated grip handle on each column header.
+  Persisted atomically through `POST /api/task-states/reorder` (rejects
+  payloads that aren't a permutation of the current state ids).
+- Each column is now sorted by **most recent activity per card** —
+  `state_entered_at` bumps on cross-column moves, leaves alone on body edits
+  and same-column drags. Migration `004-state-entered-at.sql` backfills
+  existing rows to `updated_at`.
+- Brief date/time stamp on each card top-right (`just now` / `5m` / `5pm` /
+  `05/08` / `05/08/25`) anchored by a `<time>` element with the full locale
+  string as the tooltip.
+- **Heads-up:** manual within-column ordering no longer persists. Columns
+  auto-sort by when each card last entered the column. Cross-column drag
+  and drop is unchanged.
+
 ## [0.3.0] — V1 routines: multi-step pipelines + visual builder
 
 Routines graduate from "single-action cron jobs" to a first-class Pattern-3
