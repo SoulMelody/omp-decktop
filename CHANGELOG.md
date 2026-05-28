@@ -5,143 +5,140 @@ All notable changes to omp-deck. The format is loosely based on
 
 ## [Unreleased]
 
-### Kanban polish
-- Drag-reorder columns via a dedicated grip handle on each column header.
-  Persisted atomically through `POST /api/task-states/reorder` (rejects
-  payloads that aren't a permutation of the current state ids).
-- Each column is now sorted by **most recent activity per card** —
-  `state_entered_at` bumps on cross-column moves, leaves alone on body edits
-  and same-column drags. Migration `004-state-entered-at.sql` backfills
-  existing rows to `updated_at`.
-- Brief date/time stamp on each card top-right (`just now` / `5m` / `5pm` /
-  `05/08` / `05/08/25`) anchored by a `<time>` element with the full locale
-  string as the tooltip.
-- **Heads-up:** manual within-column ordering no longer persists. Columns
-  auto-sort by when each card last entered the column. Cross-column drag
-  and drop is unchanged.
+## [0.3.0] — V1 routines, V2 canvas, reliability + notifications, orientation + chat polish
 
-## [0.3.0] — V1 routines: multi-step pipelines + visual builder
+Three big surfaces (V1 routines, V2 canvas builder, reliability + notification stack) land alongside a wave of smaller refinements (kanban polish, ask-tool bridge, starter skills, orientation Settings, queued prompts, kb:// resolution, image paste, app icon).
 
-Routines graduate from "single-action cron jobs" to a first-class Pattern-3
-agent platform: multi-step pipelines, multiple trigger types per routine,
-shared context across steps, cross-run state, budget caps, and a form-mode
-visual builder so authoring doesn't require YAML literacy.
+### Routines V1 — multi-step pipelines
 
-### Routine engine
-- Multi-step pipeline runner at `apps/server/src/routines/v1-runner.ts`
-  dispatching 8 step types: `run`, `agent`, `write`, `http`, `mcp` (stubbed
-  for V1.5), `transform`, `wait`, `set_state`. Each step type has its own
-  executor file under `apps/server/src/routines/steps/`.
-- `RoutineSpec` is a YAML document persisted in `routines.spec_yaml` (V1
-  source of truth) with derived columns (`cron`, `concurrency`, `budget_json`,
-  `tags`, `timezone`) mirrored for query speed. V0 single-action routines
-  keep working unchanged — the runner branches on `spec_version`.
-- Per-step record persistence: `routine_step_runs` table populated with
-  status, stdout/stderr excerpts, structured JSON output, error, model used,
-  tokens in/out, cost micros, duration, retry attempt.
-- Templating engine (`{{ run.id }}`, `{{ run.date }}`, `{{ steps.X.json.field }}`,
-  `{{ steps.X.stdout }}`) at `apps/server/src/routines/template.ts`. Value-mode
-  preserves type for single-expression payloads; string-mode for embedded use.
-- Sandboxed `when:` + `transform` evaluator at `apps/server/src/routines/sandbox.ts`
-  using quickjs-emscripten with a 100ms wall-clock cap. Secrets are redacted
-  at marshal time so adversarial expressions can't exfiltrate them.
+Routines graduate from "single-action cron jobs" to a first-class agent platform: typed step pipelines, multiple trigger sources per routine, shared context across steps, persistent cross-run state, budget caps, and a form-mode visual builder so authoring doesn't require YAML literacy.
 
-### Triggers
-- Three trigger sources per routine: `cron` (multi-cron supported per
-  routine), `webhook` (POST to `/hooks/*` with `X-Routine-Signature: sha256=...`
-  HMAC verification), `manual` (POST to `/api/routines/:id/run` with optional
-  params).
-- `event:` triggers reserved in the schema for V1.5.
-- Internal HMAC-signed bearer token for the `http` step's localhost calls
-  (`apps/server/src/routines/internal-auth.ts`) — wired but unused in V1,
-  ready for managed-hosting V1.5.
+- Multi-step pipeline runner at `apps/server/src/routines/v1-runner.ts` dispatching 9 step types: `run`, `agent`, `write`, `http`, `deck`, `mcp` (stubbed for V1.5), `transform`, `wait`, `set_state`. Each step type has its own executor under `apps/server/src/routines/steps/`.
+- `RoutineSpec` is a YAML doc persisted in `routines.spec_yaml` (V1 source of truth) with derived columns (`cron`, `concurrency`, `budget_json`, `tags`, `timezone`) mirrored for query speed. V0 single-action routines keep working — the runner branches on `spec_version`.
+- Per-step persistence in `routine_step_runs` (status, stdout/stderr excerpts, structured JSON output, error, model, tokens in/out, cost micros, duration, retry attempt).
+- Templating engine (`{{ run.id }}`, `{{ run.date }}`, `{{ steps.X.json.field }}`, `{{ steps.X.stdout }}`) at `apps/server/src/routines/template.ts`; value-mode preserves type for single-expression payloads, string-mode for embedded use.
+- Sandboxed `when:` + `transform` evaluator at `apps/server/src/routines/sandbox.ts` using `quickjs-emscripten` with a 100ms wall-clock cap. Secrets redacted at marshal time.
+- Three trigger sources per routine: `cron` (multi-cron supported), `webhook` (`POST /hooks/*` with `X-Routine-Signature: sha256=...` timing-safe HMAC verify), `manual` (`POST /api/routines/:id/run`). `event:` reserved in schema for V1.5.
+- Concurrency policies: `skip` (default), `queue`, `cancel-previous`, `parallel`.
+- Budget enforcer: `max_duration_secs`, `max_llm_cost_usd`, `max_llm_tokens_input/output`, `max_steps_executed`. Hard-aborts with `abort_reason: 'budget'`.
+- Cross-run persistent state: `routine_state` table keyed by `(routine_id, key)`; `state.*` exposed in template + sandbox context; `set_state` step UPSERTs.
+- Per-step `on_failure` (`abort` / `continue` / `retry`) + retry policy (`times`, `backoff: linear | exponential`, `max_delay_secs`, `after_retry`).
+- `deck` step type with discriminated `action` for first-party mutations safer than raw `http`: `create_inbox_item`, `create_task`, `move_task`, `promote_inbox_item_to_task`. Single executor, schema validation, builder shows one form per action.
+- Curated YAML templates under `apps/server/src/templates/`. `GET /api/routine-templates` lists; `POST /api/routine-templates/:slug` installs in disabled state for review. Ships `daily-briefing` as the V1 proof point (7 steps reading deck tasks + inbox, agent summary, deck inbox capture, state persist).
+- Run observability: `/routines/:id/runs/:runId` RunDetailView with polling live updates, step expansion (stdout / stderr / json / error), replay, status pill. `GET /api/routines/:id/metrics` returns total / successCount / successRate30d / p50/p95 duration / mtdCostMicros / last-30 sparkline. WS frames `routine_run_started` / `routine_step_event` / `routine_run_finished`.
 
-### Runtime controls
-- Concurrency policies: `skip` (default), `queue`, `cancel-previous`,
-  `parallel`. In-memory controller at `routines/concurrency.ts`.
-- Budget enforcer (`routines/budget.ts`): `max_duration_secs`,
-  `max_llm_cost_usd`, `max_llm_tokens_input/output`, `max_steps_executed`.
-  Checked between steps; hard-aborts with `abort_reason: 'budget'` on excess.
-  Cost estimation uses a static `PRICES_PER_MILLION` table (documented as
-  estimate, not invoice).
-- Cross-run persistent state: `routine_state` table keyed by (routine_id, key).
-  The `set_state` step UPSERTs; `state.*` is in the template + sandbox context.
-- Per-step `on_failure` (`abort` / `continue` / `retry`) + retry policy
-  (`times`, `backoff: linear | exponential`, `max_delay_secs`, `after_retry`).
+### Routines V2 — visual canvas builder
 
-### Visual builder (Tier 1)
-- Form-mode editor for V1 routines at `apps/web/src/components/routines/`,
-  driven by the same JSON Schemas Ajv validates against — single source of
-  truth, two renderings.
-- Tabs: **Steps** (one card per step, expandable, with up/down/delete and
-  the type-specific form), **Triggers** (cron with next-5-runs preview,
-  webhook with path + secret_env, manual), **Settings** (name, description,
-  concurrency dropdown, IANA timezone, tags, full budget grid, declared
-  state keys), **Spec (YAML)** (raw YAML buffer with Apply-to-form).
-- Form ↔ YAML round-tripping. Form edits update the YAML buffer; valid
-  YAML edits parse back into the form. Invalid YAML disables the apply
-  with a line-numbered parse error + schema error list.
-- Add-step picker with one-line descriptions per type. Up/down reorder
-  (DnD ships in V1.5).
-- "Pipeline" vs "Single-action" toggle on the editor header. New routines
-  default to V1; existing V0 routines continue to render in the legacy
-  single-action form.
-- Webhook secret rotation button: mints a fresh server-side secret on
-  demand, shown once with a copy-to-clipboard control.
+- React Flow surface under `apps/web/src/components/routines/canvas/`. Drag-position persistence into `layout.nodes`; add-step palette; slide-over inspector (inline ≥1100px, drawer <1100px).
+- Edge authoring with `kind: success | true | false`; "if"-flavored nodes. Graph importer round-trips `RoutineSpec` ↔ nodes/edges through `stringifySpec` without data loss.
+- Graph compiler (T-67/T-69) validates duplicate-id, missing-target, self-loop, cycle. Kahn topo-sort orders steps; AND-merges branch edges into downstream `when:` gates while preserving existing predicates. Compile errors gate Save and stamp red rings + floating message strip.
+- Save preview dialog (T-70): modal opens when committing from canvas mode and the compiled YAML differs from the saved spec. LCS line diff with +N / -N summary and per-line gutter. Opt out via `OMP_DECK_CANVAS_SKIP_PREVIEW=1` or `localStorage["omp-deck:canvas-skip-preview"] = "1"`.
+- Run overlay (T-71): `useRunOverlay` fetches recent runs + the selected run's step records and subscribes to the routine WS frames for live paint. StepNode renders pulsing status ring while running, duration / model / tokens / cost badges. Floating `RunOverlayPicker` scrubs through run history.
+- Output preview + replay (T-72): StepInspector grows a "Last run" section with status pill, duration, tabs over stdout / stderr / json / error. "Open in Run Detail" deep-links to `/routines/:id/runs/:runId#step-<stepId>`; `RunDetailView` reads the hash fragment, auto-expands the matching StepCard, scrolls it into view.
+- Form-mode editor (Tier 1) preserved alongside the canvas. Same JSON Schemas Ajv validates against — single source of truth, two renderings. Tabs: Steps / Triggers / Settings / Spec (YAML). Form ↔ YAML round-tripping with line-numbered parse errors on invalid YAML.
+- Agent-step sandbox fix: `runV1Pipeline` now takes `agentSandboxRoot` and lazily `mkdir`s `<dataDir>/routine-runs/<runId>/` on the first agent step; `omp -p` runs there instead of `$HOME`, so the embedded coding agent can't latch onto unrelated files in the user's home as briefing material.
 
-### Templates
-- Curated YAML templates under `apps/server/src/templates/`. `GET
-  /api/routine-templates` lists; `POST /api/routine-templates/:slug` installs
-  the routine in disabled state for review.
-- V1 ships **daily-briefing** as the proof-point: 7 steps (should_run gate,
-  fetch_tasks, fetch_inbox, digest, agent summary, write to inbox, persist
-  state). Verified end-to-end with a real LLM call (1483 tokens, ~$0.011).
+### Reliability + notifications (T-85)
 
-### Run observability
-- New route `/routines/:id/runs/:runId` — **RunDetailView** with polling
-  live updates, per-step expansion (stdout / stderr / structured json /
-  error), status pill, replay button.
-- Metrics endpoint `GET /api/routines/:id/metrics` returns total,
-  successCount, successRate30d, p50/p95 duration, mtdCostMicros, last-30
-  sparkline data.
-- WS broadcasts: `routine_run_started`, `routine_step_event`,
-  `routine_run_finished` frames consumed by the client for live updates.
+- `build-info` module resolves `serverStartedAt`, `pid`, `version`, `buildSha` at boot. `/api/health` enriched with these + `uptimeSecs`.
+- `WsHub` broadcasts `heartbeat` ServerFrame every 5s via `broadcastBus`.
+- `supervise-deck-server.ps1` wraps the deck server with restart-on-crash, exponential backoff (1s-60s, resets after >30s lifetime), give-up at 10 consecutive quick exits; decisions logged to `.logs/supervisor.log`.
+- Web `ConnectionIndicator` dot in header (green / yellow / red by heartbeat gap), tooltip exposes server identity + uptime.
+- `NotificationService` with pluggable channel registry; default channel failure does not block siblings; envelope stamped with uuid + timestamp; default sound rules (info silent, warn+ audible) overridable.
+- `BrowserNotificationChannel` broadcasts `notification` ServerFrame. Protocol: `notification` + `heartbeat` frames, `NotificationLevel`, `NotificationPayload`.
+- `v1-runner` fires `notify()` on failed / aborted / budget run finalize.
+- Web: store handlers dedupe by id, cap at 50. `audio.ts` plays Web Audio sine-tone sequences per level (no asset files). `NotificationPermissionBanner` shows on first frame when permission is `default` and not dismissed. `NotificationToast` bottom-right stack, max 4, auto-dismiss info/warn, ARIA roles per level, click-through to `actionUrl`.
+- Agent-initiated `move_task` to `s_done` fires a one-shot OS notification ("Agent shipped: <title>"). User-driven and reorder-within-done do not notify.
+- Settings → Notifications panel: browser permission state + request CTA, audio toggle + per-level tone preview, permission-banner reset, server identity card (pid / version / build sha / uptime / heartbeat age), recent activity tail with per-row dismiss.
 
-### Integrations stub
-- New nav-rail entry **Integrations** at `/integrations`. V1 ships a stub
-  pointing at the V1.5 plan: install MCP servers via `/mcp install` in chat
-  for now; Workspace MCP (taylorwilsdon/google_workspace_mcp) lands as the
-  curated install in V1.5.
+### Orientation — editable session-shaping artifacts (T-89)
 
-### Schema + protocol
-- DB migration `003-routines-v1.sql`: extends `routines` (`spec_yaml`,
-  `concurrency`, `budget_json`, `tags`, `timezone`, `spec_version`),
-  extends `routine_runs` (`trigger_payload`, `total_llm_tokens`,
-  `total_llm_cost_micros`, `aborted_at`, `abort_reason`, `step_count_*`),
-  adds `routine_step_runs`, `routine_webhook_secrets`, `routine_state`.
-- Protocol: new types `RoutineSpec`, `RoutineStep` (8-variant discriminated
-  union), `RoutineTrigger` (4-variant union), `RoutineBudget`,
-  `RoutineRetryPolicy`, `RoutineStepRun`, `RoutineConcurrency`,
-  `RoutineStepStatus`. New WS frames per above. Ajv validator at
-  `packages/protocol/src/validate.ts` over 14 JSON Schemas.
+Surfaces the three session-shaping artifacts in the deck UI so non-developers can view and tweak them without touching server source.
+
+- **Prelude** (`OMP_DECK_CONTEXT`) lifted out of the `in-process.ts` constant into a deck-managed override file; bridge reads effective value at `createAgentSession`. Effective on next session create — no server restart.
+- **`/start` command** body + description editable in place; re-read every fire.
+- **Maintenance gate** exposes enable toggle, three numeric knobs (`MIN_OP_MSGS`, `MIN_RELEASE_AGE_MS`, `FIRE_FLOOR_MS`), and the current org-root detection state. The deck server now sets `OMP_DECK_ORG_ROOT` itself so the extension activates regardless of session cwd; honors a `DISABLED` env flag from Settings.
+- New: `orientation-store(+test)`, `routes-orientation`, web `orientation-api`, SettingsView Orientation tab. Protocol types: `PreludeResponse`, `StartCommand`, `MaintenanceGateState`. `env-schema` entries for the gate knobs.
+
+### Chat — queued prompts + `kb://` resolution
+
+- WS frames now default `streamingBehavior` to `followUp` instead of throwing `AgentBusyError` when a prompt arrives mid-turn (the user previously just saw the message vanish).
+- New `clear_queue` client frame + server handler drains the SDK's pending queue and emits a `queue_cleared` event so the web reconciles. `SessionHandle` exposes `isStreamingNow()` + `queuedMessageCount()`.
+- Reducer/store/types track `queuedPrompts` per session; Composer surfaces the queue with a clear affordance; new `QueuedMessage` component renders pending entries inline in the chat.
+- New `KbProtocolHandler` registered on the SDK's process-global `InternalUrlRouter` at server boot, so `read kb://…` from any agent session resolves through the same KB root the REST layer serves (`OMP_DECK_KB_ROOT` or `~/kb`). Singleton must register before the first `createAgentSession`.
+
+### Chat — composer prompt history (T-10)
+
+- `useComposerHistory(cwd)` hook backed by a pure store + localStorage, keyed per workspace cwd. Caret rules mirror a shell: ArrowUp recalls only on the first visual line, ArrowDown only on the last. Cap 100 entries; consecutive duplicates and recall-then-send-unmodified do not pollute history.
+
+### Permission prompts — `ask` tool bridge (T-83)
+
+Bridges the SDK `ask` tool to the deck UI so any extension that opens a permission/selection/input dialog renders inline rather than failing silently.
+
+- `ExtensionUIBridge` implements `ExtensionUIContext` per session and publishes `ext_ui_dialog_open` frames to subscribed WS clients; `ext_ui_dialog_response` from the client settles the SDK promise.
+- `InProcessAgentBridge` passes `hasUI: true` and wires `setToolUIContext` so the SDK actually registers `AskTool`. Disposing a session cancels all pending dialogs.
+- `WsHub` subscribes new connections to UI frames (with replay of pending dialogs for late subscribers) and routes responses.
+- Protocol: `ext_ui_dialog_open` + `ext_ui_dialog_cancel` ServerFrames; `ext_ui_dialog_response` ClientFrame. Strict superset covering select / editor / confirm / input. `KNOWN_TOOLS` gains `ask`.
+- Web `ExtUiDialog` modal renders select (with Recommended / Other), editor (multiline + Ctrl+Enter), input, and confirm dialogs. Store tracks `pendingDialogs` by `sessionId` and exposes `respondToExtUiDialog`; ChatView mounts the modal at the chat surface.
+- Fix: deck initializes the SDK's `theme` global at boot (built-in `dark` JSON via `getThemeByName()` + `setThemeInstance()`). Without this the ask tool dereferenced `undefined` the moment it tried to render any question; symptom was `undefined is not an object (evaluating 'theme.status')` on every invocation.
+
+### Starter skills (T-82)
+
+- Bundles five upstream skills from `mattpocock/skills` (MIT, pinned to `b8be62f`) so they auto-install to `~/.omp/agent/skills/` on first boot via `starter-skills.ts`:
+  - `handoff` — compact a session for the next agent
+  - `diagnose` — 6-phase debugging discipline centered on building a fast feedback loop first
+  - `zoom-out` — go up a layer and map modules/callers in unfamiliar code
+  - `prototype` — throwaway code with two branches (logic prototype as terminal app, UI variants behind a route param)
+  - `grill-me` — walk the decision tree of a plan one question at a time
+- Single adaptation: `diagnose` Phase 6 referenced `/improve-codebase-architecture` (not imported); rewritten in place to "hand off the architectural finding into a task or knowledge article."
+- Provenance: every imported `.md` gets a footer pointing at the exact upstream blob (commit-pinned); `hitl-loop.template.sh` gets the same in a comment header. `starter-skills/ATTRIBUTION.md` is the index + re-sync procedure.
+
+### Kanban polish (T-78 / T-79 / T-80)
+
+- Drag-reorder columns via a dedicated `GripVertical` handle on each column header (the column name still triggers rename). Persisted atomically through `POST /api/task-states/reorder` — rejects payloads that aren't a permutation of the current state ids before any UPDATE.
+- Per-column recency sort: migration `004-state-entered-at.sql` adds `tasks.state_entered_at` (backfilled to `updated_at`) and an index on `(state_id, state_entered_at DESC)`. `createTask` stamps creation time; `moveTask` bumps only when the move actually changes column; same-column drops and body edits leave the timestamp alone. `listTasks` orders each column by `state_entered_at DESC` with `order_in_state` as tiebreaker.
+- Brief date/time stamp on each card top-right (`just now` / `5m` / `5pm` / `MM/DD` / `MM/DD/YY`) via `apps/web/src/lib/time.ts:formatBriefTime`. Anchored by a `<time>` element with the full locale string as tooltip; tracks `updated_at` but does NOT move the card.
+- **Heads-up:** manual within-column ordering no longer persists. Columns auto-sort by when each card last entered the column. Cross-column drag-and-drop is unchanged.
+
+### Tasks — image paste + agent-rendered images
+
+- `POST /api/uploads/image` accepts raw `image/*` bodies or `multipart/form-data`. Content-addressed storage at `<dataDir>/uploads/<yyyy>/<mm>/<sha256-prefix>.<ext>` — re-pasting the same screenshot is a no-op on disk. Served back via `/uploads/*` with immutable caching since the path encodes the bytes.
+- Validation: whitelist of png/jpeg/gif/webp/svg, 10MB cap, traversal-safe display-name sanitization. Rejects empty / unsupported / oversized with 4xx, never 500.
+- `MarkdownEdit` intercepts paste and drop events while editing. Bytes upload asynchronously with a unique placeholder spliced at the caret, rewritten to `![alt](/uploads/...)` on success or pulled on failure. Concurrent pastes don't collide.
+- Agent-written task bodies that include image markdown (absolute URLs or relative `/uploads/...` paths) render inline through the same Markdown component. `.markdown img` gets `max-w-full` / rounded / bordered treatment so a 4K screenshot doesn't blow out the modal.
+
+### Web polish
+
+- App icon + favicon. Vector derivative of the user-supplied stack-of-tiles artwork — five isometric rhombi with a pink → purple → blue gradient, single shared linear-gradient in user space. Ships as `apps/web/public/icon.svg` (canonical), `favicon-32.png`, `apple-touch-icon.png` (180×180 iOS), `icon.png` (512×512). SVG linked first so modern engines get crisp scaling.
+
+### Routines — fixes
+
+- `run` step `readClipped()` switched from `reader.cancel()` to drain-and-discard after hitting the 8KB excerpt cap (T-103). Cancelling closed the read end of the pipe; on Windows the child writer then got EPIPE on its next `print(flush=True)`, Python re-raised as `OSError: [Errno 22] Invalid argument`, and the routine step failed after having collected useful output. Drain-and-discard lets the writer see a clean EOF when it finishes naturally. The 8KB cap itself is unchanged — it was the close that broke things, not the size.
+
+### Tests + hygiene
+
+- Routine-template smoke test iterates `listTemplates()` rather than hardcoding slugs, so local-only templates (gitignored personal routines) get validation coverage in dev without failing CI when absent on clean clones. Only `daily-briefing` is `REQUIRED_SHIPPED`; everything else present is validated against the V1 routine spec schema. Catches typos (unknown step type, missing required field, invalid id regex) before they 500 the install endpoint.
+- Maintenance-gate redesign: replaces 7 overlapping suppression layers with a single release-cursor invariant + 3 floor thresholds. Fires at most once per release segment; one trivial "continue" no longer re-triggers. Defaults raised to be much calmer for long agentic sessions.
+- T-58 cleanup: 5 pre-existing `noUncheckedIndexedAccess` errors fixed in `kb-service.ts` and `KbView.tsx`; both `apps/server` and `apps/web` typecheck clean.
+- `*.tsbuildinfo` added to `.gitignore`; `apps/web/tsconfig.tsbuildinfo` removed from index.
+- Vite `envPrefix` extended to expose `OMP_DECK_*` to the client.
 
 ### What's deferred to V1.5
-- DnD step reordering (uses the existing dnd-kit DragOverlay pattern)
-- MCP step type real implementation (currently stubbed with a clear V1.5
-  pointer; use `agent` step with `mcp_servers_allowed` for now)
-- Smart-reorder warnings when reordering breaks a downstream context
-  reference
-- `mcp` step form auto-completes (`server` + `tool` dropdowns from installed
-  MCP servers) once the Integrations page ships
-- Workspace MCP integration (Gmail / Calendar / Drive / Docs) for the
-  inbox-triager template
-- Skill / MCP-server allowlist enforcement on `agent` steps (the SDK does
-  not yet expose per-invocation surface restriction)
+
+- DnD step reordering on the form-mode editor (canvas surface already supports drag-position)
+- `mcp` step type real implementation (currently stubbed with a clear V1.5 pointer; use `agent` step with `mcp_servers_allowed` for now)
+- Smart-reorder warnings when reordering breaks a downstream context reference
+- `mcp` step form auto-completes (`server` + `tool` dropdowns from installed MCP servers) once the Integrations page ships
+- Workspace MCP integration (Gmail / Calendar / Drive / Docs) for the inbox-triager template
+- Skill / MCP-server allowlist enforcement on `agent` steps (the SDK does not yet expose per-invocation surface restriction)
+- TUI parity: plan mode, inline `!bash` / `$python` execution in composer
 
 ### Dependencies
+
 - `apps/server`: `quickjs-emscripten@^0.31.0`, `yaml@^2.9.0`
 - `packages/protocol`: `ajv@^8.17.1`, `ajv-formats@^3.0.1`
-- `apps/web`: `yaml@^2.9.0`
+- `apps/web`: `yaml@^2.9.0`, `@xyflow/react@^12.10.2` (canvas), `@dnd-kit/sortable@^10.0.0` (kanban column reorder)
+- SDK pinned at `15.1.7` (no bump this release)
 
 ## [0.2.0] — KB Cockpit + Maintenance Gate
 
