@@ -158,6 +158,21 @@ step("stash files that must not ship", () => {
 	writeFileSync(STASH_MANIFEST, JSON.stringify({ stashed: manifest }, null, "\t"));
 });
 
+step("verify shim shebang is LF", () => {
+	// Defense in depth: .gitattributes forces LF on bin/* and scripts/*.mjs,
+	// but a stale Windows checkout with `core.autocrlf=true` can still end
+	// up with CRLF on disk. Shipping a CRLF shebang breaks the bin on every
+	// macOS / Linux install (`env: 'node\r': No such file or directory`),
+	// so we hard-fail here rather than publish broken bytes.
+	const shim = readFileSync(path.join(ROOT, "bin", "omp-deck.mjs"));
+	const firstLineEnd = shim.indexOf(0x0a); // \n
+	if (firstLineEnd > 0 && shim[firstLineEnd - 1] === 0x0d) {
+		throw new Error(
+			"bin/omp-deck.mjs has CRLF line endings; run `git checkout -- bin/` to renormalize",
+		);
+	}
+});
+
 function isSymlink(p) {
 	try {
 		return lstatSync(p).isSymbolicLink();
