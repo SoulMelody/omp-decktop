@@ -12,9 +12,11 @@ dist
 *.log
 .bun
 .vite
+.generated
 
 # Build artifacts
 apps/*/dist
+apps/*/dist-zh
 apps/web/dist-server
 .next
 

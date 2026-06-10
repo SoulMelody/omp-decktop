@@ -5,7 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev:zh": "vite --config vite.i18n.config.ts",
 		"build": "tsc -b && vite build",
+		"build:zh": "tsc -b && vite build --config vite.i18n.config.ts",
 		"preview": "vite preview",
 		"typecheck": "tsc -b --noEmit"
 	},

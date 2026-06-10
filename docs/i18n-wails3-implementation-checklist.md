@@ -1,438 +1,349 @@
 # i18n + Wails 3 Desktop Implementation Checklist
 
-## Document Purpose
+## Purpose
 
-This document turns the current i18n + Wails 3 desktop plan into a repository-level implementation checklist for `omp-deck`.
+This document captures the recommended repo strategy for adding Chinese translation support and packaging the app with Wails 3 while keeping upstream merges manageable.
 
 Primary goals:
 
-- Add Chinese UI translation support with minimal disruption to upstream merges
-- Package the app as a desktop application with Wails 3
-- Keep the desktop layer isolated from core web/server logic
-- Prefer additive changes over large refactors
+- Ship a Chinese-capable desktop build
+- Keep upstream source files as close to original as practical
+- Avoid long-lived manual edits across many `tsx` files
+- Keep desktop concerns isolated from the current Bun + React app
 
-Non-goals for the first pass:
+Primary constraint:
 
-- Translating every server-generated error string
-- Rewriting the Bun server into Go
-- Replacing the existing web architecture
-- Achieving perfect parity for every browser-only API on day one
+- The tracked source tree should remain merge-friendly
 
----
-
-## Current Repo Shape
-
-Relevant areas in the current repository:
-
-- `apps/web`: React + Vite frontend
-- `apps/server`: Bun + Hono backend
-- `packages/protocol`: shared protocol/types
-
-Important implementation facts from the current codebase:
-
-- The frontend assumes same-origin API access via `/api`
-- The frontend assumes same-origin WebSocket access via `/ws`
-- The Bun server already serves static frontend assets in production
-- The Vite dev server already proxies `/api` and `/ws` to the Bun server
-
-This is ideal for a low-intrusion desktop architecture:
-
-- Keep the existing frontend behavior
-- Keep the existing Bun server behavior
-- Add a Wails desktop shell that starts the Bun server as a child process
+Because of that constraint, the recommended i18n path in this repo is **generated-copy localization**, not "edit every tracked React file in place".
 
 ---
 
-## Guiding Principles
+## Recommended Architecture
 
-Use these rules to keep future upstream merges manageable.
+### Web localization
 
-- Prefer adding new files over rewriting existing ones
-- Keep i18n concerns inside `apps/web`
-- Avoid modifying `packages/protocol` unless truly necessary
-- Avoid mixing translation work with unrelated UI refactors
-- Keep Wails code in a separate top-level app directory
-- Do not change API routes, WebSocket paths, or existing protocol shapes for v1
-- Preserve English as the source-of-truth fallback locale
-- Translate UI copy, but do not translate code, model IDs, env keys, API paths, or tool identifiers
+Use a generated-copy workflow:
+
+- Keep `apps/web/src` as the upstream-facing source tree
+- Store translation resources separately
+- Generate a localized working copy before dev/build
+- Run codemods only on the generated copy
+- Point a dedicated Vite config at the generated copy
+
+This means:
+
+- tracked `tsx` files stay close to upstream
+- localized React code exists only under generated output
+- merge conflicts are dramatically reduced
+
+### Desktop packaging
+
+Use a standalone Wails shell:
+
+- Wails starts the Bun server as a child process
+- Bun continues serving `/api`, `/ws`, uploads, and static assets
+- Wails opens `http://127.0.0.1:<port>/`
+
+This keeps desktop packaging independent from the current web/server architecture.
 
 ---
 
-## Recommended Target Architecture
+## Why This Strategy
 
-### i18n
+There are three broad choices:
 
-Recommended stack:
+1. In-place i18n edits across tracked `tsx` files
+2. DOM overlay / runtime text replacement
+3. Generated-copy localization
 
-- `i18next`
-- `react-i18next`
+For this repo, option 3 is the best balance.
 
-Recommended frontend structure:
+Why not in-place tracked edits:
 
-- `apps/web/src/i18n/index.ts`
-- `apps/web/src/i18n/resources/en.ts`
+- they work technically
+- they create lots of future merge pressure
+- every upstream UI change can collide with local translation edits
+
+Why not a pure DOM overlay:
+
+- fragile with React rerenders
+- hard to cover placeholders, aria labels, dialog text, and dynamic states
+- difficult to keep accurate as the app evolves
+
+Why generated-copy localization fits best:
+
+- React still renders true translated UI
+- tracked upstream source stays mostly clean
+- localization work becomes reproducible instead of hand-maintained
+
+---
+
+## Repo Layout
+
+### Tracked source of truth
+
+- `apps/web/src`
+- `apps/server/src`
 - `apps/web/src/i18n/resources/zh-CN.ts`
-- `apps/web/src/i18n/useLocale.ts`
-- `apps/web/src/i18n/format.ts`
+- `docs/i18n-wails3-implementation-checklist.md`
 
-### Desktop
+### Generated or automation-only area
 
-Recommended desktop app location:
+Recommended:
 
-- `apps/desktop`
+- `localization/config.json`
+- `localization/scripts/*`
+- `.generated/web-src-i18n/*`
+- `.generated/web-entry-i18n/*`
 
-Recommended architecture:
+Do not commit generated localized source:
 
-- Wails launches a local Bun server child process
-- Bun server serves API, WebSocket, uploads, and static frontend
-- Wails opens a window to `http://127.0.0.1:<dynamic-port>/`
+- `.generated/**`
 
-Why this architecture is preferred:
+Optional to keep tracked:
 
-- Minimal changes to existing app logic
-- Frontend keeps using `/api` and `/ws` unchanged
-- Bun server remains the single HTTP entrypoint
-- Wails stays isolated as a packaging and lifecycle layer
+- localization scripts
+- key maps
+- extraction config
 
----
+Do not keep tracked by default:
 
-## Directory and File Plan
-
-### New i18n files
-
-Add:
-
-- `apps/web/src/i18n/index.ts`
-- `apps/web/src/i18n/resources/en.ts`
-- `apps/web/src/i18n/resources/zh-CN.ts`
-- `apps/web/src/i18n/useLocale.ts`
-- `apps/web/src/i18n/format.ts`
-
-Likely update:
-
-- `apps/web/package.json`
-- `apps/web/src/main.tsx`
-- `apps/web/src/views/SettingsView.tsx`
-
-### New desktop files
-
-Add:
-
-- `apps/desktop/go.mod`
-- `apps/desktop/main.go`
-- `apps/desktop/wails.json` or Wails 3 equivalent config files
-- `apps/desktop/internal/app/app.go`
-- `apps/desktop/internal/runtime/server_process.go`
-- `apps/desktop/internal/runtime/ports.go`
-- `apps/desktop/internal/runtime/health.go`
-- `apps/desktop/README.md`
-
-Optional later:
-
-- desktop-specific icons
-- installer resources
-- platform-specific packaging overrides
-
-### Root-level script updates
-
-Possible updates:
-
-- root `package.json` scripts for web i18n workflow
-- root docs for desktop build flow
-
-Avoid in v1:
-
-- changing the existing `apps/server` startup contract unless required
+- generated rewritten `tsx`
+- generated temporary entrypoints
+- generated message snapshots unless intentionally curated
 
 ---
 
-## Phase Plan
+## High-Level Build Flow
 
-## Phase 0: Preparation
+### Normal upstream-oriented development
+
+Use the original app source:
+
+- `bun run dev`
+- `bun run build`
+
+### Chinese localized development
+
+Use generated-copy commands:
+
+- `bun run l10n:prepare`
+- `bun run dev:zh`
+
+### Chinese localized build
+
+- `bun run l10n:prepare`
+- `bun run build:zh`
+
+Conceptually:
+
+1. Copy selected web source into `.generated`
+2. Inject i18n helpers and replace hardcoded text in the generated copy
+3. Build or serve from the generated copy
+
+---
+
+## What Stays Tracked vs Generated
+
+### Keep tracked
+
+- translation dictionaries
+- localization config
+- codemod rules
+- file include/exclude lists
+- Wails desktop source
+- docs explaining the workflow
+
+### Keep generated
+
+- rewritten React component files
+- generated i18n entrypoints for build
+- temporary alias roots
+- machine-produced mappings and snapshots unless they are intentionally reviewed artifacts
+
+---
+
+## Concrete Web Plan
+
+## Phase 0: Re-stabilize the tracked tree
 
 Objective:
 
-- Create safe seams before translating or packaging anything
+- Stop carrying large manual `tsx` translation edits in the tracked source tree
 
 Checklist:
 
-- [ ] Create this implementation branch separately from other feature work
-- [ ] Decide whether desktop code will live under `apps/desktop` or top-level `desktop`
-- [ ] Confirm Wails 3 version to pin for this repo
-- [ ] Decide minimum supported desktop platforms for v1
-- [ ] Decide whether Bun runtime will be bundled or treated as external during local development
-- [ ] Create a short ADR or README note describing the chosen architecture
+- [ ] Restore tracked `apps/web/src/**/*.tsx` files to upstream-facing versions
+- [ ] Keep translation resources such as `apps/web/src/i18n/resources/zh-CN.ts`
+- [ ] Remove generated localization output from tracked changes
+- [ ] Add `.generated/` to `.gitignore` if not already ignored
+- [ ] Decide whether `localization/` scripts are worth keeping now or later
 
 Acceptance:
 
-- Team agrees that the desktop layer will wrap the existing Bun server instead of replacing it
+- Tracked UI source is not broadly rewritten for i18n
+- Translation work remains represented by resource files and automation
 
 ---
 
-## Phase 1: Add i18n Foundation
+## Phase 1: Define generation boundaries
 
 Objective:
 
-- Introduce translation infrastructure without changing product behavior
+- Be explicit about what files are allowed to be localized automatically
 
 Checklist:
 
-- [ ] Install `i18next` and `react-i18next` in `apps/web`
-- [ ] Create a small `i18n/index.ts` initializer
-- [ ] Add `en` resource file with baseline strings
-- [ ] Add `zh-CN` resource file with first-pass Chinese translations
-- [ ] Initialize locale from `localStorage`, then browser language, then fallback to `en`
-- [ ] Wrap the app in i18n initialization from `apps/web/src/main.tsx`
-- [ ] Add locale helper hook to change language cleanly
-- [ ] Add shared formatting helpers for date/time/number using `Intl`
+- [ ] Create a localization config listing included source files
+- [ ] Start with a narrow set of high-value files
+- [ ] Define excluded paths such as tests, protocol types, and tooling files
+- [ ] Add key naming rules
+- [ ] Define strings that must remain untranslated
 
-Suggested code touch points:
+Suggested starting include set:
 
-- `apps/web/src/main.tsx`
-- new `apps/web/src/i18n/*`
+- layout and navigation
+- settings shell
+- onboarding shell
+- a small number of main views
 
-Rules:
+Avoid at first:
 
-- Do not refactor view structure in this phase
-- Do not translate all screens yet
-- Do not move existing store logic unless necessary
+- deeply dynamic form builders
+- tool rendering internals
+- protocol-facing technical labels
 
 Acceptance:
 
-- App boots normally in English
-- Language can be switched programmatically
-- Missing translations fall back cleanly to English
+- The automation has a clear and intentionally limited target surface
 
 ---
 
-## Phase 2: Add Language Settings UI
+## Phase 2: Build the generated-copy pipeline
 
 Objective:
 
-- Let users switch between English and Chinese
+- Create a repeatable local pipeline that never rewrites tracked source files
 
 Checklist:
 
-- [ ] Add a language selector to `SettingsView`
-- [ ] Store the selected locale in `localStorage`
-- [ ] Reflect the active locale in UI immediately without reload if practical
-- [ ] Ensure the default locale is deterministic
-- [ ] Add translation keys for the language selector itself
+- [ ] Create `.generated/web-src-i18n`
+- [ ] Copy allowed source files from `apps/web/src`
+- [ ] Copy or synthesize any required entry files
+- [ ] Run codemods against the generated files only
+- [ ] Inject `useTranslation()` and `t(...)` only in generated output
+- [ ] Write a dedicated Vite config for localized builds
+- [ ] Alias imports so the app resolves from `.generated` during `dev:zh` and `build:zh`
 
-Suggested code touch points:
+Recommended generated assets:
 
-- `apps/web/src/views/SettingsView.tsx`
-- `apps/web/src/i18n/useLocale.ts`
-
-Recommended first version:
-
-- Support only `en` and `zh-CN`
-- Keep locale persistence purely frontend-side
-
-Avoid in v1:
-
-- adding locale persistence to the server
-- adding locale to shared protocol types
+- `.generated/web-src-i18n/**`
+- `.generated/web-entry-i18n/main.tsx`
+- `.generated/web-entry-i18n/i18n.ts`
 
 Acceptance:
 
-- User can switch language from Settings
-- Language remains selected after refresh
+- We can run a localized dev or build flow without modifying tracked `tsx` files
 
 ---
 
-## Phase 3: Translate App Shell First
+## Phase 3: Keep translation resources first-class
 
 Objective:
 
-- Translate the highest-visibility UI with the lowest behavioral risk
-
-Translate first:
-
-- navigation labels
-- settings section labels
-- layout titles
-- onboarding headings
-- common button labels
-- notification banners and toasts
-- loading, empty, and generic status text
-
-Priority files:
-
-- `apps/web/src/components/Layout.tsx`
-- `apps/web/src/components/Sidebar.tsx`
-- `apps/web/src/components/NavRail.tsx`
-- `apps/web/src/router.tsx`
-- `apps/web/src/views/SettingsView.tsx`
-- `apps/web/src/views/OnboardingView.tsx`
-- `apps/web/src/components/NotificationPermissionBanner.tsx`
-- `apps/web/src/components/NotificationToast.tsx`
+- Make translation files the durable part of the localization work
 
 Checklist:
 
-- [ ] Replace visible hardcoded strings with `t(...)`
-- [ ] Add semantic translation keys
-- [ ] Avoid using full English sentences as keys
-- [ ] Keep aria-labels translated where applicable
-- [ ] Keep route paths unchanged
-
-Naming guidance:
-
-- Good: `settings.sections.env.label`
-- Good: `common.actions.save`
-- Bad: `Environment variables`
-- Bad: `Save`
+- [ ] Keep `zh-CN.ts` organized by semantic sections
+- [ ] Keep English as fallback
+- [ ] Make sure missing keys fail safely to English
+- [ ] Add verification that generated code only references known keys
+- [ ] Add verification for duplicate or inconsistent keys
 
 Acceptance:
 
-- Main shell reads correctly in both English and Chinese
-- No route, API, or state behavior changes
+- Translation maintenance primarily happens in resource files, not in page-by-page tracked component edits
 
 ---
 
-## Phase 4: Translate Core Views
+## Phase 4: Add localized dev/build commands
 
 Objective:
 
-- Cover the screens users spend the most time in
-
-Priority order:
-
-1. Chat
-2. Tasks
-3. Routines
-4. Inbox
-5. KB
-6. Marketplace
-7. Skills
-8. Integrations
-
-Likely files:
-
-- `apps/web/src/views/ChatView.tsx`
-- `apps/web/src/views/TasksView.tsx`
-- `apps/web/src/views/RoutinesView.tsx`
-- `apps/web/src/views/InboxView.tsx`
-- `apps/web/src/views/KbView.tsx`
-- `apps/web/src/views/MarketplaceView.tsx`
-- `apps/web/src/views/SkillsView.tsx`
-- `apps/web/src/views/IntegrationsView.tsx`
+- Make the workflow ergonomic enough to use regularly
 
 Checklist:
 
-- [ ] Translate headings, labels, hints, empty states, modal copy
-- [ ] Translate button copy and inline helper text
-- [ ] Keep identifiers like task IDs, env keys, commands, and file paths untranslated
-- [ ] Keep server-returned raw error messages unchanged unless explicitly mapped
-
-Acceptance:
-
-- Core day-to-day flows are usable in Chinese
-- No broken forms caused by translation changes
-
----
-
-## Phase 5: Translate Component Long Tail
-
-Objective:
-
-- Finish lower-priority surfaces after the main UX is stable
-
-Likely areas:
-
-- `apps/web/src/components/tools/*`
-- `apps/web/src/components/chat/*`
-- `apps/web/src/components/routines/*`
-- `apps/web/src/components/tasks/*`
-- `apps/web/src/components/settings/*`
-
-Checklist:
-
-- [ ] Translate remaining modal labels and status copy
-- [ ] Translate inspector/helper surfaces
-- [ ] Normalize repeated strings into shared keys
-- [ ] Identify strings that should remain English by design
-
-Acceptance:
-
-- No major untranslated shell text remains in normal usage
-
----
-
-## Phase 6: Add Wails 3 Desktop Shell
-
-Objective:
-
-- Create an isolated desktop wrapper without changing the existing app contract
+- [ ] Add `l10n:prepare`
+- [ ] Add `dev:zh`
+- [ ] Add `build:zh`
+- [ ] Add optional `l10n:verify`
+- [ ] Document what each command reads and writes
 
 Recommended behavior:
 
-- Wails chooses an open localhost port
-- Wails starts the Bun server child process with environment overrides
-- Wails waits for health readiness
-- Wails opens the app URL in the desktop window
-- Wails stops the child process on app shutdown
-
-Checklist:
-
-- [ ] Scaffold `apps/desktop`
-- [ ] Add Wails 3 app bootstrap
-- [ ] Add child-process manager for Bun server
-- [ ] Add dynamic port selection
-- [ ] Add health polling before opening the main window
-- [ ] Inject `OMP_DECK_HOST=127.0.0.1`
-- [ ] Inject `OMP_DECK_PORT=<selected-port>`
-- [ ] Inject any desktop-specific data dir overrides if needed
-- [ ] Ensure clean shutdown on app exit
-- [ ] Capture server stdout/stderr for debugging
-
-Preferred startup contract:
-
-- Bun server remains authoritative for:
-  - `/api`
-  - `/ws`
-  - `/uploads`
-  - frontend static assets
-
-Avoid in v1:
-
-- moving HTTP routing into Go
-- proxying every request through Wails manually
-- reimplementing WebSocket behavior in the desktop shell
+- `l10n:prepare` is idempotent
+- rerunning it refreshes generated output from tracked source
+- deleting `.generated` is always safe
 
 Acceptance:
 
-- Desktop app launches the existing server and loads the app successfully
-- Existing frontend network assumptions remain valid
+- A localized build is one command away and reproducible
 
 ---
 
-## Phase 7: Desktop Packaging and Distribution
+## Phase 5: Introduce Wails 3 on top of the localized build
 
 Objective:
 
-- Produce installable desktop builds while keeping local dev practical
+- Package the Chinese build without changing the core Bun server architecture
 
 Checklist:
 
-- [ ] Decide how Bun is provided in packaged builds
-- [ ] Verify desktop app can find server assets in packaged layout
-- [ ] Add platform-specific icons and metadata
-- [ ] Add release build documentation
-- [ ] Test packaged startup on a clean machine
-
-Decision to make:
-
-- Bundle Bun runtime and app assets together
-- Or compile/package the Bun server into a more self-contained form first
-
-Recommended first shipping model:
-
-- Keep packaging simple and explicit, even if not yet perfectly minimal
+- [ ] Create `apps/desktop`
+- [ ] Make the desktop app consume the localized web build output
+- [ ] Start Bun as a child process
+- [ ] Wait for readiness before opening the window
+- [ ] Shut Bun down cleanly when the app exits
 
 Acceptance:
 
-- A non-developer can install and run the desktop build without manually opening the web UI
+- Wails packages the localized app without requiring tracked in-place i18n edits across `apps/web/src`
+
+---
+
+## Suggested File Layout
+
+### Tracked
+
+- `apps/web/src/i18n/resources/en.ts`
+- `apps/web/src/i18n/resources/zh-CN.ts`
+- `localization/config.json`
+- `localization/scripts/prepare.ts`
+- `localization/scripts/verify.ts`
+- `apps/web/vite.i18n.config.ts`
+- `apps/desktop/**`
+
+### Ignored
+
+- `.generated/web-src-i18n/**`
+- `.generated/web-entry-i18n/**`
+- `.generated/localization-cache/**`
+
+---
+
+## Vite Strategy
+
+Use a dedicated localized Vite config rather than changing the main one.
+
+Recommended split:
+
+- `apps/web/vite.config.ts` for normal upstream-facing dev/build
+- `apps/web/vite.i18n.config.ts` for generated localized dev/build
+
+This keeps the default workflow boring and predictable while letting the localized build point to generated sources.
 
 ---
 
@@ -443,211 +354,127 @@ Translate:
 - headings
 - labels
 - buttons
-- hints
 - empty states
-- warnings
-- success messages
+- helper text
+- dialogs
+- navigation labels
 - settings descriptions
-- onboarding text
 
 Do not translate:
 
-- API endpoints
+- API paths
 - route paths
 - env var names
 - task IDs
 - model IDs
+- tool ids
 - code blocks
 - shell commands
 - file paths
 - protocol field names
 - raw server logs
 
-Translate with caution:
+Translate carefully:
 
-- tool names
-- provider labels
-- marketplace metadata from external sources
+- provider display labels
+- marketplace metadata
 - server-generated error strings
+- highly technical guidance text
 
 ---
 
-## Recommended Key Structure
+## Merge-Friendly Rules
 
-Use semantic namespaces. Example:
+- Do not commit generated rewritten `tsx` files
+- Do not let localized builds become the default build path
+- Keep tracked translation edits concentrated in resource files and automation config
+- Keep Wails fully isolated in `apps/desktop`
+- Limit any tracked app-source i18n edits to the absolute minimum infrastructure needed
 
-- `common.actions.save`
-- `common.actions.cancel`
-- `common.status.loading`
-- `nav.chat`
-- `nav.tasks`
-- `settings.title`
-- `settings.sections.env.label`
-- `settings.sections.env.description`
-- `notifications.permission.enable`
-- `onboarding.steps.kb.title`
+What "absolute minimum" means here:
 
-Rules:
+- resource files
+- optional i18n bootstrap helpers
+- build scripts
+- dedicated localized Vite config
 
-- Keep keys stable even if English wording changes
-- Avoid giant flat key files
-- Group by feature area
-- Do not build keys dynamically unless necessary
+Not this:
 
----
-
-## Merge-Friendly Workflow
-
-This is the most important section for long-term maintenance.
-
-### Branching and PR strategy
-
-Split work into small PRs:
-
-1. i18n foundation
-2. settings language switcher
-3. app shell translation
-4. core views translation
-5. long-tail translation
-6. desktop shell scaffold
-7. desktop packaging
-
-### Editing rules
-
-- Only replace strings when possible
-- Avoid reordering unrelated code
-- Avoid broad formatting churn
-- Keep per-file diff size modest
-- Do not mix translation changes with behavior changes
-
-### Upstream sync strategy
-
-- Rebase frequently while the translation rollout is in progress
-- Keep `apps/desktop` isolated so upstream web/server changes rarely conflict
-- Prefer local wrappers and helper utilities over modifying shared protocol or server contracts
-
-### Conflict hotspots to expect
-
-- `apps/web/src/views/SettingsView.tsx`
-- `apps/web/src/views/OnboardingView.tsx`
-- major page views with lots of UI copy
-
-Mitigation:
-
-- touch them in focused PRs
-- do not combine multiple large concerns in the same change
+- broad manual replacement of hardcoded strings across tracked views
 
 ---
 
 ## Testing Checklist
 
-## i18n testing
+### Localization pipeline
 
-- [ ] English renders normally
-- [ ] Chinese renders normally
-- [ ] Locale persistence survives reload
-- [ ] Missing keys fall back to English
-- [ ] Dates and numbers format correctly under `zh-CN`
-- [ ] Buttons, labels, banners, and modals remain aligned after translation
-- [ ] Long Chinese text does not overflow key layouts
+- [ ] `l10n:prepare` runs from a clean checkout
+- [ ] `.generated` is recreated deterministically
+- [ ] missing keys fall back to English
+- [ ] generated localized source compiles successfully
 
-## Functional regression testing
+### App behavior
 
-- [ ] Chat session creation still works
-- [ ] WebSocket streaming still works
-- [ ] Task CRUD still works
-- [ ] Routine CRUD still works
-- [ ] Inbox flows still works
-- [ ] KB open/edit flows still works
-- [ ] Settings save flows still works
-- [ ] OAuth flows still works
-- [ ] Notifications/toasts still works
+- [ ] chat works
+- [ ] WebSocket streaming works
+- [ ] tasks work
+- [ ] routines work
+- [ ] inbox works
+- [ ] KB works
+- [ ] settings work
+- [ ] notifications still render correctly
 
-## Desktop testing
+### Merge safety
 
-- [ ] Desktop app launches reliably
-- [ ] Bun child process starts reliably
-- [ ] App waits for readiness before showing main UI
-- [ ] App exits cleanly without orphan process
-- [ ] WebSocket works inside desktop runtime
-- [ ] Uploads work inside desktop runtime
-- [ ] OAuth flow is verified in desktop context
-- [ ] Packaged build works on target OS versions
+- [ ] tracked `apps/web/src/**/*.tsx` files remain close to upstream
+- [ ] localized build works after rerunning generation from a fresh checkout
+
+### Desktop behavior
+
+- [ ] desktop app starts Bun successfully
+- [ ] desktop app waits for readiness
+- [ ] desktop app exits without orphan child processes
+- [ ] localized build is what the desktop shell serves
 
 ---
 
-## Known Risks
+## Risks
 
-### i18n risks
+### Pipeline complexity
 
-- Some strings are deeply embedded in large view files
-- Some server-originated messages will remain English in v1
-- Chinese copy may affect spacing in dense UI areas
+- Generation scripts add build complexity
+- Errors may point into generated files instead of tracked source
 
-### Desktop risks
+### Codemod limits
 
-- Wails 3 is still evolving quickly, so pinning and isolation matter
-- Desktop WebView behavior may differ from browser behavior for notifications and auth
-- Process lifecycle bugs can leave orphan Bun processes if shutdown is not handled carefully
+- Not every JSX string can be transformed safely without human review
+- Some dynamic UI may need explicit handling rules
 
-### Integration risks
+### Drift risk
 
-- OAuth flows may need special handling in desktop packaging
-- Desktop notification behavior may differ from browser notification behavior
+- If upstream changes wording or component structure, generation rules may need adjustment
 
----
-
-## Deferred Items
-
-Reasonable to defer until after the first working release:
-
-- server-side locale persistence
-- translating server-originated error payloads by code mapping
-- locale-aware markdown content in KB or onboarding generated assets
-- more than two locales
-- full desktop-native notification replacement
-- desktop auto-update flow
+Even with those costs, this is still better for this repo than carrying broad long-lived manual translation edits in tracked React files.
 
 ---
 
-## Suggested Implementation Order
+## Recommended Next Steps
 
-If executed as actual work items, use this order:
-
-1. Add `i18next` foundation
-2. Add locale persistence and switcher
-3. Translate shell and settings
-4. Translate onboarding
-5. Translate chat/tasks/routines/inbox
-6. Translate KB and remaining views
-7. Scaffold Wails desktop shell
-8. Make desktop shell start and stop Bun cleanly
-9. Add desktop packaging docs and release flow
+1. Restore tracked `tsx` files and package scripts that were changed for in-place i18n experiments
+2. Keep `zh-CN.ts` as the translation work-in-progress source
+3. Decide whether to keep or reset the current `localization/` prototype scripts
+4. Implement `.generated`-based `l10n:prepare`
+5. Add `vite.i18n.config.ts`
+6. Add `dev:zh` and `build:zh`
+7. Hook Wails to the localized build output
 
 ---
 
 ## Definition of Done
 
-The initiative is considered successfully landed when all of the following are true:
+This strategy is successfully in place when:
 
-- Chinese can be selected from the UI
-- Main product workflows are usable in Chinese
-- English remains the fallback locale
-- Translation changes are isolated mostly to `apps/web`
-- Desktop code is isolated mostly to `apps/desktop`
-- Desktop app starts the existing Bun server and opens successfully
-- No major API or protocol rewrites were required
-- Upstream syncing remains practical
-
----
-
-## Practical Next Step
-
-Start with a narrow first PR:
-
-- add i18n dependencies
-- add `apps/web/src/i18n/*`
-- initialize i18n in `main.tsx`
-- add a language switcher in `SettingsView`
-
-That gives the repo a stable foundation before large-scale translation or desktop packaging begins.
+- Chinese translations live primarily in resource files
+- localized React source is generated, not hand-maintained in tracked views
+- upstream merges do not routinely conflict with local translation work
+- the desktop build can ship the Chinese UI without broad tracked source edits
