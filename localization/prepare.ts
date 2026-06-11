@@ -525,6 +525,8 @@ function localizeInboxView(source: string): string {
 
 	// Sidebar Show processed
 	next = replaceOne(next, "<span>Show processed</span>", INBOX_SIDEBAR_SHOW_PROCESSED, "InboxView: show processed");
+	// Sidebar kind label
+	next = replaceOne(next, 'label={KIND_LABEL[k]}', INBOX_SIDEBAR_KIND_LABEL, "InboxView: sidebar kind label");
 
 	// ── ListRow hook ──
 	next = replaceOne(
@@ -589,6 +591,8 @@ function localizeInboxView(source: string): string {
 		INBOX_READER_ADD_NOTES,
 		"InboxView: reader add notes placeholder",
 	);
+	// ReaderPane kind option ({KIND_LABEL[k]})
+	next = replaceOne(next, '{KIND_LABEL[k]}', INBOX_READER_KIND_OPTION, "InboxView: reader kind option");
 
 	// ── ComposePane hook ──
 	next = replaceOne(
@@ -597,6 +601,8 @@ function localizeInboxView(source: string): string {
 		INBOX_COMPOSE_HOOK,
 		"InboxView: inject ComposePane hook",
 	);
+	// ComposePane kind option ({KIND_LABEL[k]})
+	next = replaceOne(next, '{KIND_LABEL[k]}', INBOX_COMPOSE_KIND_OPTION, "InboxView: compose kind option");
 
 
 	// ComposePane Cancel

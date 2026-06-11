@@ -1,5 +1,6 @@
 export const ROUTINES_VIEW_HOOK = `export function RoutinesView() {
-	const { t } = useTranslation();`;
+	const { t } = useTranslation();
+	const [params, setParams] = useSearchParams();`;
 
 export const ROUTINES_INDEX_HOOK = `function RoutinesIndex({
 	routines,

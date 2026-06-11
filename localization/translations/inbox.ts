@@ -1,21 +1,22 @@
 export const INBOX_KIND_LABEL = `const KIND_LABEL: Record<InboxKind, string> = {
-	email: t("inbox.kinds.emails"),
-	ticket: t("inbox.kinds.tickets"),
-	idea: t("inbox.kinds.ideas"),
-	decision: t("inbox.kinds.decisions"),
-	investigation: t("inbox.kinds.investigations"),
-	capture: t("inbox.kinds.captures"),
+	email: "inbox.kinds.emails",
+	ticket: "inbox.kinds.tickets",
+	idea: "inbox.kinds.ideas",
+	decision: "inbox.kinds.decisions",
+	investigation: "inbox.kinds.investigations",
+	capture: "inbox.kinds.captures",
 };`;
 
 export const INBOX_VIEW_HOOK = `export function InboxView() {
-	const { t } = useTranslation();`;
+	const { t } = useTranslation();
+	const setInspectorOpen = useStore((s) => s.setInspectorOpen);`;
 
-const INBOX_I18N_TITLE = "t(\"inbox.title\")";
+const INBOX_I18N_TITLE = `{filter === "all" ? t("inbox.title") : t(KIND_LABEL[filter])}`;
 export { INBOX_I18N_TITLE as INBOX_HEADER_ALL };
 
 export const INBOX_LOADING = `<EmptyHint>{t("common.status.loading")}</EmptyHint>`;
 
-export const INBOX_EMPTY_ALL = `{filter === "all" ? t("inbox.empty") : t("inbox.noItems", { kind: KIND_LABEL[filter].toLowerCase() })}`;
+export const INBOX_EMPTY_ALL = `{filter === "all" ? t("inbox.empty") : t("inbox.noItems", { kind: t(KIND_LABEL[filter]).toLowerCase() })}`;
 
 export const INBOX_SIDEBAR_HOOK = `function InboxSidebar({
 	counts,
@@ -38,7 +39,7 @@ export const INBOX_SIDEBAR_CAPTURE = `>{t("inbox.capture")}<`;
 
 export const INBOX_SIDEBAR_FILTER = `<div className="meta mb-1.5">{t("inbox.filter")}</div>`;
 
-export const INBOX_SIDEBAR_KIND_LABEL = `label={KIND_LABEL[k]}`;
+export const INBOX_SIDEBAR_KIND_LABEL = `label={t(KIND_LABEL[k])}`;
 
 export const INBOX_SIDEBAR_SHOW_PROCESSED = `<span>{t("inbox.showProcessed")}</span>`;
 
@@ -74,7 +75,7 @@ export const INBOX_READER_HOOK = `function ReaderPane({
 }) {
 	const { t } = useTranslation();`;
 
-export const INBOX_READER_KIND_OPTION = `{KIND_LABEL[k]}`;
+export const INBOX_READER_KIND_OPTION = `{t(KIND_LABEL[k])}`;
 
 export const INBOX_READER_MARK_LABEL = `label={item.processedAt ? t("inbox.markUnprocessed") : t("inbox.markProcessed")}`;
 
@@ -101,7 +102,7 @@ export const INBOX_COMPOSE_HOOK = `function ComposePane({
 }) {
 	const { t } = useTranslation();`;
 
-export const INBOX_COMPOSE_KIND_OPTION = `{KIND_LABEL[k]}`;
+export const INBOX_COMPOSE_KIND_OPTION = `{t(KIND_LABEL[k])}`;
 
 const INBOX_COMPOSE_CANCEL_TEXT = `>{t("common.actions.cancel")}<`;
 export { INBOX_COMPOSE_CANCEL_TEXT as INBOX_COMPOSE_CANCEL };
