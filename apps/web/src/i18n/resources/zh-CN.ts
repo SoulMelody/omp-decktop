@@ -182,6 +182,9 @@ const zhCN = {
 		bodyPlaceholder: "正文 — 详情、上下文、链接… (支持 markdown)",
 		saveHint: "⌘+回车保存 · esc 取消",
 		emptyDetail: "选择一项阅读，或捕获新内容。",
+		openChatDraftLine1: "请帮我处理这条收件内容。如果它可执行，请提出一个具体的下一步；",
+		openChatDraftLine2: "如果它是一个需要决策的问题，请帮我整理成清晰选项；如果应该转成任务，",
+		openChatDraftLine3: "请调用 POST /api/tasks，并在回复里告诉我新任务 id。",
 		kinds: {
 			emails: "邮件",
 			tickets: "工单",
@@ -202,6 +205,7 @@ const zhCN = {
 		graphViewer: "力导向图",
 		pickFile: "从树中选择文件。",
 		pickFileDetail: "知识库读取 ~/kb 处的 wiki。",
+		setExcludeDirsHint: "如果需要隐藏某些子目录，可设置 OMP_DECK_KB_EXCLUDE_DIRS。",
 		clickNode: "点击节点",
 		clickNodeDetail: "文件在此打开。图谱保持不变。",
 		setupTitle: "设置知识库",
@@ -284,6 +288,7 @@ const zhCN = {
 		skipStep: "跳过此步骤",
 		skipLater: "跳过 — 稍后连接",
 		skipGreeting: "跳过 — 空白输入即可",
+		errorPrefix: "设置错误：",
 	},
 
 	// ── 通知 ────────────────────────────────────────────────────────────

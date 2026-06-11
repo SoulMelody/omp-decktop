@@ -123,3 +123,7 @@ export const INBOX_EMPTY_READER_DETAIL = `<div className="text-sm text-ink-3">{t
 
 const INBOX_EMPTY_READER_CAPTURE_TEXT = `>{t("inbox.capture")}<`;
 export { INBOX_EMPTY_READER_CAPTURE_TEXT as INBOX_EMPTY_READER_CAPTURE };
+
+export const INBOX_OPEN_CHAT_DRAFT_LINE1 = "`请帮我处理这条收件内容。如果它可执行，请提出一个具体的下一步；`";
+export const INBOX_OPEN_CHAT_DRAFT_LINE2 = "`如果它是一个需要决策的问题，请帮我整理成清晰选项；如果应该转成任务，`";
+export const INBOX_OPEN_CHAT_DRAFT_LINE3 = "`请调用 POST /api/tasks，并在回复里告诉我新任务 id。`";

@@ -195,6 +195,9 @@ const en = {
 		bodyPlaceholder: "Body — details, context, links… (markdown supported)",
 		saveHint: "⌘+enter to save · esc to cancel",
 		emptyDetail: "Pick an item to read, or capture a new one.",
+		openChatDraftLine1: "Help me act on this. If it's actionable, propose a concrete next step;",
+		openChatDraftLine2: "if it's a decision needing input, frame the choice; if it should become a",
+		openChatDraftLine3: "task, POST /api/tasks and report the new task id.",
 		kinds: {
 			emails: "emails",
 			tickets: "tickets",
@@ -215,6 +218,7 @@ const en = {
 		graphViewer: "Force-directed graph",
 		pickFile: "Pick a file from the tree.",
 		pickFileDetail: "The KB cockpit reads your wiki at ~/kb.",
+		setExcludeDirsHint: "Set OMP_DECK_KB_EXCLUDE_DIRS to hide subtrees if you need to.",
 		clickNode: "Click a node",
 		clickNodeDetail: "The file opens here. The graph stays put.",
 		setupTitle: "Set up your knowledge base",
@@ -297,6 +301,7 @@ const en = {
 		skipStep: "Skip this step",
 		skipLater: "Skip — I'll connect later",
 		skipGreeting: "Skip — empty composer is fine",
+		errorPrefix: "Setup error:",
 	},
 
 	// ── Notifications ───────────────────────────────────────────────────

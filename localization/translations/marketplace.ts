@@ -82,3 +82,10 @@ export const MARKETPLACE_ADD_BTN = `{t("common.actions.add")}`;
 export const MARKETPLACE_INSTALLED_BADGE = `{t("common.status.installed")}`;
 export const MARKETPLACE_UNINSTALL_TITLE = `title={t("common.actions.uninstall")}`;
 export const MARKETPLACE_INSTALL_BTN = `{t("common.actions.install")}`;
+export const MARKETPLACE_SUGGESTED_ANTHROPIC_LABEL = `label: "Anthropic 官方"`;
+export const MARKETPLACE_SUGGESTED_ANTHROPIC_DESC = `description: "Anthropic 的第一方目录。包含精选插件、命令和技能，也是 SDK 推荐的起步选择。"`;
+export const MARKETPLACE_ADDED_HINT = `<div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 font-mono text-xs text-success">
+					已添加 {addedName}。请在下方刷新以拉取目录。
+				</div>`;
+export const MARKETPLACE_ADD_CUSTOM = `添加自定义市场`;
+export const MARKETPLACE_REMOVE_TITLE = 'title={`移除 ${source.name}`}' ;

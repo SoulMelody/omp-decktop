@@ -654,6 +654,25 @@ function localizeInboxView(source: string): string {
 	// EmptyReader Capture button
 	next = replaceOne(next, />\s*Capture\s*</, INBOX_EMPTY_READER_CAPTURE, "InboxView: empty reader capture button");
 
+	next = replaceOne(
+		next,
+		"`Help me act on this. If it's actionable, propose a concrete next step;`,",
+		`t("inbox.openChatDraftLine1"),`,
+		"InboxView: open chat draft line1",
+	);
+	next = replaceOne(
+		next,
+		"`if it's a decision needing input, frame the choice; if it should become a`,",
+		`t("inbox.openChatDraftLine2"),`,
+		"InboxView: open chat draft line2",
+	);
+	next = replaceOne(
+		next,
+		"`task, POST /api/tasks and report the new task id.`,",
+		`t("inbox.openChatDraftLine3"),`,
+		"InboxView: open chat draft line3",
+	);
+
 	return next;
 }
 
@@ -963,6 +982,40 @@ function localizeMarketplaceView(source: string): string {
 	next = replaceOne(next, 'label="Installed"', MARKETPLACE_INSTALLED_LABEL, "MarketplaceView: installed scope label");
 	next = replaceOne(next, 'label="Available"', MARKETPLACE_AVAILABLE_LABEL, "MarketplaceView: available scope label");
 	next = replaceOne(next, '<div className="meta">Sources</div>', MARKETPLACE_SOURCES_LABEL, "MarketplaceView: sources label");
+	next = replaceOne(next, 'label: "Anthropic official"', 'label: "Anthropic 官方"', "MarketplaceView: suggested label");
+	next = replaceOne(
+		next,
+		'description: "Anthropic\'s first-party catalog. Curated plugins, commands, and skills — the SDK\'s recommended starter."',
+		'description: "Anthropic 的第一方目录，包含精选插件、命令和技能，也是 SDK 推荐的起步选择。"',
+		"MarketplaceView: suggested description",
+	);
+	next = replaceOne(
+		next,
+		/>\s*Add custom marketplace\s*</,
+		">添加自定义市场<",
+		"MarketplaceView: add custom marketplace",
+	);
+	next = replaceOne(
+		next,
+		'<Badge tone="success">installed</Badge>',
+		'<Badge tone="success">{t("common.status.installed")}</Badge>',
+		"MarketplaceView: installed badge",
+	);
+	next = replaceOne(
+		next,
+		/\n\s*Install\s*\n\s*<\/button>/,
+		'\n\t\t\t\t\t\t\t{t("common.actions.install")}\n\t\t\t\t\t\t</button>',
+		"MarketplaceView: install button",
+	);
+	next = replaceOne(next, 'title={`Remove ${source.name}`}', 'title={`移除 ${source.name}`}', "MarketplaceView: remove source title");
+	next = replaceOne(
+		next,
+		'<div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 font-mono text-xs text-success">\n\t\t\t\t\tAdded {addedName}. Refresh below to fetch its catalog.\n\t\t\t\t</div>',
+		`<div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 font-mono text-xs text-success">
+					已添加 {addedName}。请在下方刷新以拉取目录。
+				</div>`,
+		"MarketplaceView: added hint",
+	);
 	return next;
 }
 
@@ -1105,6 +1158,49 @@ function localizeKbView(source: string): string {
 		`<div className="text-sm text-ink-2">{t("kb.pickFileInspect")}</div>`,
 		"KbView: pick file inspect",
 	);
+	next = replaceOne(next, 'aria-label="Search KB (Ctrl-P)"', 'aria-label="搜索知识库 (Ctrl-P)"', "KbView: search aria");
+	next = replaceOne(next, 'title="Search (Ctrl-P / ⌘P)"', 'title="搜索 (Ctrl-P / ⌘P)"', "KbView: search title");
+	next = replaceOne(
+		next,
+		'Your Karpathy-style llm-wiki. Click a file to open; wikilinks navigate in-app.',
+		'你的 Karpathy 风格 llm-wiki。点击文件即可打开；wikilink 会在应用内跳转。',
+		"KbView: sidebar hint",
+	);
+	next = replaceOne(next, 'window.confirm("Discard unsaved changes?")', 'window.confirm("放弃未保存的更改？")', "KbView: discard confirm");
+	next = replaceOne(next, 'title="Save (Ctrl-S)"', 'title="保存 (Ctrl-S)"', "KbView: save title");
+	next = replaceOne(
+		next,
+		/\n\s*Save\s*\n\s*<\/button>/,
+		"\n\t\t\t\t\t\t\t保存\n\t\t\t\t\t\t\t</button>",
+		"KbView: save label",
+	);
+	next = replaceOne(next, 'title="Discard (Esc)"', 'title="放弃更改 (Esc)"', "KbView: discard title");
+	next = replaceOne(
+		next,
+		/\n\s*Cancel\s*\n\s*<\/button>/,
+		"\n\t\t\t\t\t\t\t取消\n\t\t\t\t\t\t\t</button>",
+		"KbView: cancel label",
+	);
+	next = replaceOne(next, 'title="Edit (or click anywhere in the body)"', 'title="编辑（或点击正文任意位置）"', "KbView: edit title");
+	next = replaceOne(
+		next,
+		/\n\s*Edit\s*\n\s*<\/button>/,
+		"\n\t\t\t\t\t\t\t编辑\n\t\t\t\t\t\t\t</button>",
+		"KbView: edit label",
+	);
+	next = replaceOne(next, 'title="Close preview"', 'title="关闭预览"', "KbView: close preview title");
+	next = replaceOne(next, 'aria-label="Close preview"', 'aria-label="关闭预览"', "KbView: close preview aria");
+	next = replaceOne(next, 'window.alert("Path must end in .md");', 'window.alert("路径必须以 .md 结尾");', "KbView: path must end in md");
+	next = replaceOne(
+		next,
+		'<Loader2 className="mr-1 inline-block h-3 w-3 animate-spin" /> loading backlinks…',
+		'<Loader2 className="mr-1 inline-block h-3 w-3 animate-spin" /> 正在加载反向链接…',
+		"KbView: loading backlinks",
+	);
+	next = replaceOne(next, '>no backlinks<', '>无反向链接<', "KbView: no backlinks");
+	next = replaceOne(next, 'backlinks ({backlinks.length})', '反向链接 ({backlinks.length})', "KbView: backlinks count");
+	next = replaceOne(next, '>tags<', '>标签<', "KbView: tags label");
+	next = replaceOne(next, 'title="Click-to-filter lands in T-40"', 'title="点击筛选会跳转到 T-40"', "KbView: tag filter hint");
 	return next;
 }
 
@@ -1133,6 +1229,52 @@ function localizeIntegrationsView(source: string): string {
 		'<div className="meta mb-1.5">Design doc</div>',
 		`<div className="meta mb-1.5">{t("integrations.designDoc")}</div>`,
 		"IntegrationsView: design doc label",
+	);
+	next = replaceOne(
+		next,
+		'V1.5 will surface installed MCP servers and one-click Workspace setup.',
+		'V1.5 会提供已安装 MCP Server 展示与一键式 Workspace 配置。',
+		"IntegrationsView: sidebar hint",
+	);
+	next = replaceOne(
+		next,
+		/<p className="text-sm text-ink-2">\s*The Integrations page will host one-click installs[\s\S]*?panel\.\s*<\/p>/,
+		`<p className="text-sm text-ink-2">
+								集成页面将在未来承载精选 MCP Server 目录的一键安装，例如{" "}
+								<a
+									href="https://github.com/taylorwilsdon/google_workspace_mcp"
+									target="_blank"
+									rel="noreferrer"
+									className="text-accent hover:underline"
+								>
+									Google Workspace
+								</a>{" "}
+								（Gmail、Calendar、Drive、Docs 等）、Slack、GitHub、Linear、Notion、Discord，同时补上租户级 OAuth、自动刷新与 advertised-tools 面板。
+							</p>`,
+		"IntegrationsView: intro paragraph",
+	);
+	next = replaceOne(
+		next,
+		/<p className="text-sm text-ink-2">\s*<strong className="text-ink">In V1:<\/strong>[\s\S]*?mcp_servers_allowed: \[\.\.\.\]<\/code>\.\s*<\/p>/,
+		`<p className="text-sm text-ink-2">
+								<strong className="text-ink">当前 V1：</strong> 你已经可以在聊天里通过{" "}
+								<code className="paper-code px-1 py-0.5 text-xs">/mcp install &lt;url-or-smithery-id&gt;</code>{" "}
+								或{" "}
+								<code className="paper-code px-1 py-0.5 text-xs">/mcp smithery-search &lt;query&gt;</code>
+								安装 MCP Server。安装完成后，任何例程中的 <code>agent</code> 步骤都可以通过{" "}
+								<code className="paper-code px-1 py-0.5 text-xs">mcp_servers_allowed: [...]</code> 使用它们。
+							</p>`,
+		"IntegrationsView: v1 paragraph",
+	);
+	next = replaceOne(
+		next,
+		/<p className="text-sm text-ink-2">\s*The dedicated <code>mcp<\/code> step type[\s\S]*?deferred\.\s*<\/p>/,
+		`<p className="text-sm text-ink-2">
+								专用的 <code>mcp</code> 步骤类型也会在 V1.5 一并落地；等 SDK bridge 暴露直接的{" "}
+								<code className="paper-code px-1 py-0.5 text-xs">callMcpTool()</code>{" "}
+								接口后，就能支持确定性工具调用。当前 schema 已接受该步骤定义，只是执行层暂未启用。
+							</p>`,
+		"IntegrationsView: mcp step paragraph",
 	);
 	return next;
 }
@@ -1241,6 +1383,123 @@ function localizeOnboardingView(source: string): string {
 		`title={t("onboarding.skipSetup")}`,
 		"OnboardingView: skip setup title",
 	);
+	next = replaceOne(next, 'Welcome to omp·deck', '欢迎使用 omp·deck', "OnboardingView: welcome title");
+	next = replaceOne(
+		next,
+		/A local cockpit for your AI coding agent — multi-session chat, kanban,\s*routines, knowledge base, all loopback-only on this machine\./,
+		'面向 AI 编码代理的本地驾驶舱：多会话对话、看板、例程、知识库，全部仅在这台机器上回环运行。',
+		"OnboardingView: welcome intro",
+	);
+	next = replaceOne(next, 'The next few steps will:', '接下来的几步会：', "OnboardingView: next steps lead");
+	next = replaceOne(next, 'Scaffold a knowledge base the agent can read from', '建立代理可读取的知识库', "OnboardingView: step1 kb");
+	next = replaceOne(next, 'Connect a model provider so chat actually works', '连接模型服务商，让对话真正可用', "OnboardingView: step1 provider");
+	next = replaceOne(next, 'Optionally enable an auto-greeting on every new session', '可选地为每个新会话启用自动问候', "OnboardingView: step1 greeting");
+	next = replaceOne(
+		next,
+		/Each step is skippable — you can re-run this wizard any time from\s*Settings → Onboarding\./,
+		'每一步都可以跳过，之后也能随时在 设置 → 引导 中重新运行本向导。',
+		"OnboardingView: footnote",
+	);
+	next = replaceOne(next, 'Get started <ChevronRight className="ml-1 h-4 w-4" />', '开始使用 <ChevronRight className="ml-1 h-4 w-4" />', "OnboardingView: get started");
+	next = replaceOne(next, '>Knowledge base<', '>知识库<', "OnboardingView: kb title");
+	next = replaceOne(
+		next,
+		/omp·deck's <code className="font-mono">\/kb<\/code> view is a\s*plaintext-portable wiki the agent reads and writes\. Set one up now and\s*the agent has somewhere to put long-term memory\./,
+		'omp·deck 的 <code className="font-mono">/kb</code> 视图是一个纯文本可移植 wiki，代理会在这里读写长期记忆。现在先建好它，代理后面就有地方沉淀上下文。',
+		"OnboardingView: kb intro",
+	);
+	next = replaceOne(next, '>Location<', '>位置<', "OnboardingView: location");
+	next = replaceOne(
+		next,
+		/>\s*Change…\s*</,
+		">更改…<",
+		"OnboardingView: change path",
+	);
+	next = replaceOne(next, '"Already exists — scaffold will add starter files only if missing."', '"已存在 - 脚手架只会补齐缺失的初始文件。"', "OnboardingView: kb exists");
+	next = replaceOne(next, '"Will be created with a README and system/ stubs the agent reads at session start."', '"将创建 README 与 system/ 初始文件，供代理在会话开始时读取。"', "OnboardingView: kb create info");
+	next = replaceOne(
+		next,
+		/<span className="ml-1 text-warn">\s*Path differs from server's resolved root; takes full effect after deck restart\.\s*<\/span>/,
+		`<span className="ml-1 text-warn">
+							路径与服务端当前解析出的根目录不同；重启 Deck 后才会完全生效。
+						</span>`,
+		"OnboardingView: path changed hint",
+	);
+	next = replaceOne(next, /\bSkip this step\b/, '{t("onboarding.skipStep")}', "OnboardingView: skip this step");
+	next = replaceOne(next, 'Ready', '准备就绪', "OnboardingView: ready");
+	next = replaceOne(next, 'Continue <ChevronRight className="ml-1 h-4 w-4" />', '继续 <ChevronRight className="ml-1 h-4 w-4" />', "OnboardingView: continue");
+	next = replaceOne(next, '"Scaffolding…"', '"正在初始化…"', "OnboardingView: scaffolding");
+	next = replaceOne(next, '"Create knowledge base"', '"创建知识库"', "OnboardingView: create knowledge base");
+	next = replaceOne(next, '>Connect a provider<', '>连接服务商<', "OnboardingView: provider title");
+	next = replaceOne(
+		next,
+		/Pick how the agent talks to a model\. Subscriptions you already pay\s*for \(Claude Pro\/Max, ChatGPT Plus\/Pro\) are the easiest — no API key\s*to manage\. OpenRouter is a pay-as-you-go alternative\./,
+		'选择代理连接模型的方式。你已经在付费的订阅（Claude Pro/Max、ChatGPT Plus/Pro）最省心，不需要自己管理 API Key；OpenRouter 则适合按量付费。',
+		"OnboardingView: provider intro",
+	);
+	next = replaceOne(next, '"OAuth subscription via claude.ai"', '"通过 claude.ai 的 OAuth 订阅"', "OnboardingView: claude subtitle");
+	next = replaceOne(next, '"OAuth subscription via chatgpt.com"', '"通过 chatgpt.com 的 OAuth 订阅"', "OnboardingView: chatgpt subtitle");
+	next = replaceOne(
+		next,
+		'Pay-as-you-go API key. Single account, hundreds of models.',
+		'按量计费的 API Key。一个账户，对接数百个模型。',
+		"OnboardingView: openrouter subtitle",
+	);
+	next = replaceOne(
+		next,
+		/>\s*Connected\s*</,
+		"> 已连接<",
+		"OnboardingView: connected",
+	);
+	next = replaceOne(next, '"Saving…"', '"保存中…"', "OnboardingView: saving");
+	next = replaceOne(next, '"Save key"', '"保存 Key"', "OnboardingView: save key");
+	next = replaceOne(next, 'Get a key <ExternalLink className="h-3 w-3" />', '获取 Key <ExternalLink className="h-3 w-3" />', "OnboardingView: get key");
+	next = replaceOne(
+		next,
+		/For other providers \(OpenAI direct, Anthropic API, Google, Groq, xAI,\s*etc\.\), see <a href="\/settings" className="underline">Settings → Providers<\/a> after onboarding\./,
+		'如果要配置其他服务商（OpenAI 官方 API、Anthropic API、Google、Groq、xAI 等），可在完成引导后前往 <a href="/settings" className="underline">Settings → Providers</a>。',
+		"OnboardingView: other providers hint",
+	);
+	next = replaceOne(next, 'Skip — I\'ll connect later', '跳过 — 稍后连接', "OnboardingView: provider skip later");
+	next = replaceOne(next, '>Session greeting<', '>会话问候<', "OnboardingView: autostart title");
+	next = replaceOne(
+		next,
+		/When you start a new chat, the agent can automatically read your\s*knowledge base, query the local API for open tasks \/ inbox \/ routines,\s*and summarize where you are\. Fires once per session\./,
+		'创建新对话时，代理可以自动读取知识库、查询本地 API 中的任务 / 收件箱 / 例程状态，并先做一次当前情况概览。每个会话只触发一次。',
+		"OnboardingView: autostart intro",
+	);
+	next = replaceOne(
+		next,
+		'Preview what the agent will do on each new session',
+		'预览代理在每个新会话中会执行的内容',
+		"OnboardingView: autostart preview",
+	);
+	next = replaceOne(next, 'Skip — empty composer is fine', '{t("onboarding.skipGreeting")}', "OnboardingView: skip greeting");
+	next = replaceOne(
+		next,
+		/>\s*Enabled\s*</,
+		"> 已启用<",
+		"OnboardingView: enabled",
+	);
+	next = replaceOne(next, '"Enabling…"', '"启用中…"', "OnboardingView: enabling");
+	next = replaceOne(next, '"Enable auto-greeting"', '"启用自动问候"', "OnboardingView: enable auto greeting");
+	next = replaceOne(next, "You're set up", "设置完成", "OnboardingView: all set title");
+	next = replaceOne(
+		next,
+		/Your deck has a <code className="font-mono">T-1 Welcome<\/code> task in\s*the kanban walking through all the surfaces\. Open it any time from the\s*Tasks tab\./,
+		'你的 Deck 已经带有一个 <code className="font-mono">T-1 Welcome</code> 任务，会带你熟悉各个界面；之后随时都能在任务页重新打开。',
+		"OnboardingView: done intro",
+	);
+	next = replaceOne(next, "What's next:", "接下来建议：", "OnboardingView: next title");
+	next = replaceOne(next, 'Send a prompt in chat to test your provider connection.', '先发一条消息，确认服务商连接是否正常。', "OnboardingView: next chat");
+	next = replaceOne(next, 'Tab to <strong>Tasks</strong> and read <strong>T-1</strong> for a deeper tour.', '切到 <strong>任务</strong> 页，阅读 <strong>T-1</strong> 获取更完整的导览。', "OnboardingView: next tasks");
+	next = replaceOne(
+		next,
+		'Visit <a href="/marketplace" className="underline">Marketplace</a>{" "}\n\t\t\t\t\t\tto install plugins / skills (recommended: claude-plugins-official).',
+		'访问 <a href="/marketplace" className="underline">市场</a>{" "}\n\t\t\t\t\t\t安装插件 / 技能（推荐：claude-plugins-official）。',
+		"OnboardingView: next marketplace",
+	);
+	next = replaceOne(next, 'Open chat <ChevronRight className="ml-1 h-4 w-4" />', '打开对话 <ChevronRight className="ml-1 h-4 w-4" />', "OnboardingView: open chat");
 	return next;
 }
 
