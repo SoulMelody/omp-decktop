@@ -48,13 +48,14 @@
 		"postpack": "node scripts/postpack.mjs"
 	},
 	"bin": {
-		"omp-deck": "./bin/omp-deck.mjs"
+		"ompd": "./bin/ompd.mjs"
 	},
 	"files": [
 		"bin",
 		"apps/server/src",
 		"apps/server/package.json",
 		"apps/web/dist",
+		"apps/web/dist-zh",
 		"starter-skills",
 		"starter-extensions",
 		"README.md",

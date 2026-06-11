@@ -141,11 +141,43 @@ export const LAYOUT_TOOL_CARDS_ARIA = `aria-label={allCollapsed ? t("${LAYOUT_I1
 export const LAYOUT_TOOL_CARDS_TITLE = `title={allCollapsed ? t("${LAYOUT_I18N.expandAllToolCards}") : t("${LAYOUT_I18N.collapseAllToolCards}")}`;
 
 export const DETECT_LOCALE_FN = `function detectLocale(): string {
-\ttry {
-\t\tconst stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-\t\tif (stored && (stored === "en" || stored === "zh-CN")) return stored;
-\t} catch {
-\t\t/* quota / private browsing */
-\t}
 \treturn "zh-CN";
-\t}`;
+}`;
+
+// ─── SessionPicker Replacements ──────────────────────────────────────
+
+export const SESSION_PICKER_HOOK = `export function SessionPicker() {
+\tconst { t } = useTranslation();
+\tconst session = useStore(selectActiveSession);`;
+
+export const SESSION_PICKER_START_SESSION = `<h1 className="text-lg font-semibold text-ink">{t("sessionPicker.startSession")}</h1>`;
+
+export const SESSION_PICKER_WORKSPACE = `<div className="meta mb-1.5">{t("sessionPicker.workspace")}</div>`;
+
+export const SESSION_PICKER_NEW_SESSION = `>\t\t\t\t\t\t<Plus className="h-4 w-4" />
+\t\t\t\t\t\t{t("sessionPicker.newSession")}
+\t\t\t\t\t<`;
+
+export const SESSION_PICKER_LIVE = `<div className="meta mb-2">{t("sessionPicker.live")}</div>`;
+
+export const SESSION_PICKER_RECENT = `<div className="meta mb-2">{t("sessionPicker.recent")}</div>`;
+
+export const SESSION_PICKER_NO_PREVIOUS = `{t("sessionPicker.noPreviousSessions")}`;
+
+export const SESSION_PICKER_ONBOARDING_REMINDER_HOOK = `function OnboardingReminderTile() {
+\tconst { t } = useTranslation();
+\tconst [visible, setVisible] = useState(false);`;
+
+export const SESSION_PICKER_ONBOARDING_TEXT = `{t("sessionPicker.skippedOnboarding")}{" "}
+\t\t\t\t<a href="/onboarding" className="font-medium text-accent underline">
+\t\t\t\t\t{t("sessionPicker.onboardingLink")}
+\t\t\t\t</a>
+\t\t\t\t.`;
+
+export const SESSION_PICKER_WELCOME_TASK_HOOK = `function WelcomeTaskTile() {
+\tconst { t } = useTranslation();
+\tconst [visible, setVisible] = useState(false);`;
+
+export const SESSION_PICKER_WELCOME_TASK_TEXT = `<span className="font-medium">T-1 Welcome to omp·deck</span> {t("sessionPicker.welcomeTaskWaiting")}`;
+
+export const SESSION_PICKER_OPEN_TASKS = `{t("sessionPicker.openTasks")} <ArrowRight className="h-3 w-3" />`;
