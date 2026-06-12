@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 0.6.1)"
+        description: "Release version (e.g. 1.0.0)"
         required: true
-        default: "0.6.1"
+        default: "1.0.0"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -50,19 +50,21 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Generate Windows syso resource
-        working-directory: apps/desktop/build
-        run: wails3 generate syso -arch amd64 -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.json -out ../wails_windows_amd64.syso
+        shell: pwsh
+        run: |
+          Set-Location "apps\desktop\build"
+          wails3 generate syso -arch amd64 -icon windows\icon.ico -manifest windows\wails.exe.manifest -info windows\info.json -out ..\wails_windows_amd64.syso
 
       - name: Build Go desktop exe (production)
-        working-directory: apps/desktop
+        working-directory: apps\desktop
         env:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: "0"
-        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/${{ env.APP_NAME }}.exe
+        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin\${{ env.APP_NAME }}.exe
 
       - name: Clean up syso
-        working-directory: apps/desktop
+        working-directory: apps\desktop
         run: Remove-Item -ErrorAction SilentlyContinue *.syso
 
       # ── Assemble release zip ───────────────────────────────────────────────
@@ -75,21 +77,21 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$release/packages"
 
           # Desktop exe
-          Copy-Item "apps/desktop/bin/${{ env.APP_NAME }}.exe" "$release/"
+          Copy-Item "apps\desktop\bin\${{ env.APP_NAME }}.exe" "$release/"
 
           # Server source + package.json (system Bun executes TS directly)
-          Copy-Item -Recurse "apps/server/src" "$release/apps/server/"
-          Copy-Item "apps/server/package.json" "$release/apps/server/"
+          Copy-Item -Recurse "apps\server\src" "$release/apps/server/"
+          Copy-Item "apps\server\package.json" "$release/apps/server/"
 
           # Chinese web frontend
-          Copy-Item -Recurse "apps/web/dist-zh" "$release/apps/web/"
+          Copy-Item -Recurse "apps\web\dist-zh" "$release/apps/web/"
 
           # Starter content
           Copy-Item -Recurse "starter-skills" "$release/"
           Copy-Item -Recurse "starter-extensions" "$release/"
 
           # Protocol workspace package
-          Copy-Item -Recurse "packages/protocol" "$release/packages/"
+          Copy-Item -Recurse "packages\protocol" "$release/packages/"
 
           # Root workspace config + node_modules for server runtime
           Copy-Item "package.json" "$release/"
@@ -97,7 +99,7 @@ jobs:
           Copy-Item -Recurse "node_modules" "$release/"
 
           # Launcher script
-          "@echo off`r`ntitle OMP Deck Desktop`r`necho Starting OMP Deck Desktop...`r`necho Requires Bun >= 1.3.14 on PATH: https://bun.sh`r`nstart `"`" `"%~dp0${{ env.APP_NAME }}.exe`"" | Out-File -Encoding ASCII "$release/start.bat"
+          "@echo off`r`ntitle omp-decktop`r`necho Starting omp-decktop...`r`necho Requires Bun >= 1.3.14 on PATH: https://bun.sh`r`nstart `"`" `"%~dp0${{ env.APP_NAME }}.exe`"" | Out-File -Encoding ASCII "$release/start.bat"
 
           # Zip it
           Compress-Archive -Path "$release/*" -DestinationPath "${{ env.APP_NAME }}-v${{ github.ref_name }}-win-x64-zh.zip" -Force
@@ -109,77 +111,10 @@ jobs:
           path: ${{ env.APP_NAME }}-v${{ github.ref_name }}-win-x64-zh.zip
           retention-days: 30
 
-  # ─── macOS build (cross-compile from macOS runner) ────────────────────────
-  build-macos:
-    name: macOS arm64 · ZH desktop
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Install workspace dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build Chinese frontend
-        run: bun run build:zh
-
-      - name: Install Wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
-      - name: Build Go desktop app (macOS .app)
-        working-directory: apps/desktop
-        env:
-          GOOS: darwin
-          GOARCH: arm64
-          CGO_ENABLED: "0"
-        run: |
-          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" \
-            -o bin/${{ env.APP_NAME }}
-
-      - name: Assemble macOS release
-        run: |
-          RELEASE="${{ env.APP_NAME }}-zh-macos"
-          mkdir -p "$RELEASE/apps/server/src" "$RELEASE/apps/web" "$RELEASE/packages"
-
-          # Desktop binary
-          cp "apps/desktop/bin/${{ env.APP_NAME }}" "$RELEASE/"
-          chmod +x "$RELEASE/${{ env.APP_NAME }}"
-
-          # Server + web + starters
-          cp -r apps/server/src "$RELEASE/apps/server/"
-          cp apps/server/package.json "$RELEASE/apps/server/"
-          cp -r apps/web/dist-zh "$RELEASE/apps/web/"
-          cp -r starter-skills "$RELEASE/"
-          cp -r starter-extensions "$RELEASE/"
-          cp -r packages/protocol "$RELEASE/packages/"
-          cp package.json tsconfig.base.json "$RELEASE/"
-          cp -r node_modules "$RELEASE/"
-
-          # Shell launcher (requires system Bun)
-          printf '#!/bin/bash\ncd "$(dirname "$0")"\necho "Requires Bun >= 1.3.14 on PATH: https://bun.sh"\n./omp-deck-desktop\n' > "$RELEASE/start.sh"
-          chmod +x "$RELEASE/start.sh"
-
-          # Create tar.gz
-          tar czf "${{ env.APP_NAME }}-v${{ github.ref_name }}-macos-arm64-zh.tar.gz" -C "$RELEASE" .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.APP_NAME }}-macos-arm64-zh
-          path: ${{ env.APP_NAME }}-v${{ github.ref_name }}-macos-arm64-zh.tar.gz
-          retention-days: 30
-
-  # ─── Create GitHub Release with all artifacts ─────────────────────────────
+  # ─── Create GitHub Release with artifact ──────────────────────────────────
   release:
     name: Create Release
-    needs: [build-windows, build-macos]
+    needs: [build-windows]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

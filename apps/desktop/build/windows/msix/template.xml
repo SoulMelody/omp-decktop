@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MsixPackagingToolTemplate
+    xmlns="http://schemas.microsoft.com/msix/packaging/msixpackagingtool/template/2022">
+    <Settings
+        AllowTelemetry="false"
+        ApplyACLsToPackageFiles="true"
+        GenerateCommandLineFile="true"
+        AllowPromptForPassword="false">
+    </Settings>
+    <Installer
+        Path="omp-deck-desktop.exe"
+        Arguments=""
+        InstallLocation="C:\Program Files\OMP\OMP Deck">
+    </Installer>
+    <PackageInformation
+        PackageName="OMP Deck"
+        PackageDisplayName="OMP Deck"
+        PublisherName="CN=OMP"
+        PublisherDisplayName="OMP"
+        Version="0.1.0.0"
+        PackageDescription="OMP Deck Desktop">
+        <Capabilities>
+            <Capability Name="runFullTrust" />
+            
+        </Capabilities>
+        <Applications>
+            <Application
+                Id="com.ompdeck.app"
+                Description="OMP Deck Desktop"
+                DisplayName="OMP Deck"
+                ExecutableName="omp-deck-desktop.exe"
+                EntryPoint="Windows.FullTrustApplication">
+                
+            </Application>
+        </Applications>
+        <Resources>
+            <Resource Language="en-us" />
+        </Resources>
+        <Dependencies>
+            <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+        </Dependencies>
+        <Properties>
+            <Framework>false</Framework>
+            <DisplayName>OMP Deck</DisplayName>
+            <PublisherDisplayName>OMP</PublisherDisplayName>
+            <Description>OMP Deck Desktop</Description>
+            <Logo>Assets\AppIcon.png</Logo>
+        </Properties>
+    </PackageInformation>
+    <SaveLocation PackagePath="omp-deck-desktop.msix" />
+    <PackageIntegrity>
+        <CertificatePath></CertificatePath>
+    </PackageIntegrity>
+</MsixPackagingToolTemplate>

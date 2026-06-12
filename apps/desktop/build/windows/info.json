@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "1.0.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "1.0.0",
+			"CompanyName": "OMP",
+			"FileDescription": "omp-decktop - AI agent cockpit",
+			"LegalCopyright": "© 2026, OMP",
+			"ProductName": "omp-decktop",
+			"Comments": "omp-decktop desktop application"
+		}
+	}
+}

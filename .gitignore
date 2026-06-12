@@ -60,6 +60,11 @@ apps/server/src/templates/paper-trading-*.yaml
 # Local convenience scripts. Start-OMP-Deck.cmd ships with the template;
 # personal helpers like Restart-OMP-Deck.cmd stay out of the public repo.
 Restart-OMP-Deck.cmd
+# Desktop build — ignore generated outputs but keep Windows assets needed for CI
 apps/desktop/build/*
+!apps/desktop/build/config.yml
+!apps/desktop/build/appicon.png
+!apps/desktop/build/windows/
+apps/desktop/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 data/deck.db*
 apps/desktop/wails_windows_amd64.syso
