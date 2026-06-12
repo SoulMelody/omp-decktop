@@ -93,10 +93,15 @@ jobs:
           # Protocol workspace package
           Copy-Item -Recurse -Path "packages\protocol" -Destination "$release/packages/protocol"
 
-          # Root workspace config + node_modules for server runtime
+          # Root workspace config + lockfile (for production install)
           Copy-Item "package.json" "$release/"
           Copy-Item "tsconfig.base.json" "$release/"
-          Copy-Item -Recurse -Path "node_modules" -Destination "$release/node_modules"
+          Copy-Item "bun.lock" "$release/"
+
+          # Install only production dependencies (no Vite/React/Tailwind/devDeps)
+          Set-Location $release
+          bun install --production --ignore-scripts --frozen-lockfile
+          Set-Location ".."
 
           # Launcher script
           "@echo off`r`ntitle omp-decktop`r`necho Starting omp-decktop...`r`necho Requires Bun >= 1.3.14 on PATH: https://bun.sh`r`nstart `"`" `"%~dp0${{ env.APP_NAME }}.exe`"" | Out-File -Encoding ASCII "$release/start.bat"
