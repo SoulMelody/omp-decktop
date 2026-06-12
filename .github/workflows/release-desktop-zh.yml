@@ -100,7 +100,7 @@ jobs:
 
           # Install only production dependencies (no Vite/React/Tailwind/devDeps)
           Set-Location $release
-          bun install --production --ignore-scripts --frozen-lockfile
+          bun install --production --ignore-scripts
           Set-Location ".."
 
           # Launcher script
