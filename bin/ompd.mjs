@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// ompd — omp-deck with Chinese (zh-CN) localization.
+// ompd — omp-deck with Chinese (zh-CN) localization (dev mode).
 //
-// Like `omp-deck` but serves the i18n-transformed web build (dist-zh).
-// Runs the l10n prepare step, builds the zh web assets if missing,
-// then starts the Bun server with OMP_DECK_WEB_DIST pointed at dist-zh,
-// and opens the deck in the default browser.
+// Runs the l10n prepare step, then starts the Bun server (port 8787)
+// alongside the Vite dev server with the i18n config (port 5174, HMR).
+// Opens the Vite dev URL so source changes hot-reload instantly while
+// the zh-CN translations are baked into the generated source tree.
 
 import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(HERE, "..");
 const SERVER_ENTRY = path.join(PKG_ROOT, "apps", "server", "src", "index.ts");
-const WEB_DIST_ZH = path.join(PKG_ROOT, "apps", "web", "dist-zh");
+const WEB_DIR = path.join(PKG_ROOT, "apps", "web");
 const STARTER_SKILLS = path.join(PKG_ROOT, "starter-skills");
 const STARTER_EXTENSIONS = path.join(PKG_ROOT, "starter-extensions");
 
@@ -45,23 +45,14 @@ function resolveDataDir() {
 	return path.join(os.homedir(), ".omp-deck");
 }
 
-function ensureZhBuild() {
-	if (existsSync(path.join(WEB_DIST_ZH, "index.html"))) return;
-
-	console.log("ompd: zh-CN web build not found, building...");
+function runL10nPrepare() {
+	console.log("ompd: running l10n:prepare...");
 	try {
-		// Step 1: run l10n:prepare to generate the i18n source tree
 		execSync("bun run l10n:prepare", { cwd: PKG_ROOT, stdio: "inherit" });
-		// Step 2: build the zh web assets
-		execSync("bun run build:zh", { cwd: PKG_ROOT, stdio: "inherit" });
 	} catch (err) {
-		fail(`zh-CN build failed: ${err.message ?? err}`);
+		fail(`l10n:prepare failed: ${err.message ?? err}`);
 	}
-
-	if (!existsSync(path.join(WEB_DIST_ZH, "index.html"))) {
-		fail("zh-CN build completed but dist-zh/index.html not found");
-	}
-	console.log("ompd: zh-CN build ready.");
+	console.log("ompd: l10n:prepare done.");
 }
 
 function openBrowser(url) {
@@ -89,56 +80,76 @@ function main() {
 		fail(`server entry missing at ${SERVER_ENTRY} — broken install?`);
 	}
 	ensureBun();
-	ensureZhBuild();
+	runL10nPrepare();
 
 	const dataDir = resolveDataDir();
 	mkdirSync(dataDir, { recursive: true });
 
+	const host = process.env.OMP_DECK_HOST?.trim() || "127.0.0.1";
+	const serverPort = process.env.OMP_DECK_PORT?.trim() || "8787";
+	const webPort = process.env.OMP_DECK_WEB_PORT?.trim() || "5174";
+	const deckUrl = `http://${host}:${webPort}/`;
+
 	const env = { ...process.env };
 	env.OMP_DECK_DB_PATH ??= path.join(dataDir, "deck.db");
 	env.OMP_DECK_UPLOADS_ROOT ??= path.join(dataDir, "uploads");
-	// Force the zh-CN web dist
-	env.OMP_DECK_WEB_DIST = WEB_DIST_ZH;
+	// Do NOT set OMP_DECK_WEB_DIST — Vite dev server handles static serving
 	env.OMP_DECK_STARTER_SKILLS_DIR ??= STARTER_SKILLS;
 	env.OMP_DECK_STARTER_EXTENSIONS_DIR ??= STARTER_EXTENSIONS;
 	env.OMP_DECK_DEFAULT_CWD ??= os.homedir();
 
-	const host = env.OMP_DECK_HOST?.trim() || "127.0.0.1";
-	const port = env.OMP_DECK_PORT?.trim() || "8787";
-	const deckUrl = `http://${host}:${port}/`;
+	const extraArgs = process.argv.slice(2);
+	const children = [];
 
-	const args = process.argv.slice(2);
-	const child = spawn("bun", [SERVER_ENTRY, ...args], {
+	// ── Bun server (port 8787) ────────────────────────────────────────────
+	const server = spawn("bun", ["--hot", SERVER_ENTRY, ...extraArgs], {
 		stdio: "inherit",
 		env,
 		cwd: PKG_ROOT,
 	});
+	children.push(server);
 
-	function forward(sig) {
-		try {
-			child.kill(sig);
-		} catch {
-			/* child already exited */
+	// ── Vite dev server with i18n config (port 5174, HMR) ─────────────────
+	const vite = spawn("bun", ["run", "vite", "--config", "vite.i18n.config.ts"], {
+		stdio: "inherit",
+		env,
+		cwd: WEB_DIR,
+	});
+	children.push(vite);
+
+	function cleanup(sig) {
+		for (const c of children) {
+			try { c.kill(sig); } catch { /* already exited */ }
 		}
 	}
-	process.on("SIGINT", () => forward("SIGINT"));
-	process.on("SIGTERM", () => forward("SIGTERM"));
+	process.on("SIGINT", () => cleanup("SIGINT"));
+	process.on("SIGTERM", () => cleanup("SIGTERM"));
 
-	// Open browser after a short delay to let the server start.
-	setTimeout(() => openBrowser(deckUrl), 2000);
+	// Open browser after a short delay to let both servers start.
+	setTimeout(() => openBrowser(deckUrl), 3000);
 
-	console.log(`ompd: deck at ${deckUrl}`);
+	console.log(`ompd: server on http://${host}:${serverPort}`);
+	console.log(`ompd: vite   on ${deckUrl} (HMR)`);
 
-	child.on("exit", (code, signal) => {
-		if (signal) {
-			process.kill(process.pid, signal);
-		} else {
-			process.exit(code ?? 0);
-		}
-	});
-	child.on("error", (err) => {
-		fail(`failed to spawn bun: ${err.message}`);
-	});
+	let exited = 0;
+	for (const child of children) {
+		child.on("exit", (code, signal) => {
+			exited++;
+			if (signal) {
+				cleanup(signal);
+				process.kill(process.pid, signal);
+			} else if (exited === children.length) {
+				process.exit(code ?? 0);
+			} else {
+				// One process died — kill the other so we don't leave orphans.
+				cleanup("SIGTERM");
+				process.exit(code ?? 1);
+			}
+		});
+		child.on("error", (err) => {
+			fail(`failed to spawn process: ${err.message}`);
+		});
+	}
 }
 
 main();

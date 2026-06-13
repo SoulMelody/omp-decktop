@@ -158,7 +158,7 @@ export function Composer() {
 
 	const slashOpen = slashQuery !== null && filteredSlash.length > 0;
 	const disabled = !session;
-	const isBusy = session?.status === "streaming" || session?.status === "retrying";
+	const isBusy = session?.status === "streaming" || session?.status === "retrying" || session?.status === "compacting";
 
 	const autoresize = useCallback((): void => {
 		const ta = taRef.current;
@@ -678,29 +678,26 @@ export function Composer() {
 						)}
 						disabled={disabled}
 					/>
-					{isBusy ? (
-						<button
-							type="button"
-							className="btn-danger h-7 gap-1 self-end px-2 text-xs"
-							onClick={() => abort()}
-							aria-label="Stop streaming (Ctrl+.)"
-							title="Stop streaming (Ctrl+.)"
-						>
-							<Square className="h-3 w-3" fill="currentColor" />
-							<span className="font-mono uppercase tracking-meta text-2xs">stop</span>
-						</button>
-					) : (
-						<button
-							type="button"
-							className="btn-primary h-7 w-7 p-0 self-end disabled:bg-line-strong"
-							onClick={send}
-							disabled={disabled || (draft.trim().length === 0 && images.length === 0)}
-							aria-label="Send"
-							title="Send"
-						>
-							<ArrowUp className="h-3.5 w-3.5" />
-						</button>
-					)}
+					<button
+						type="button"
+						className="btn-danger h-7 gap-1 self-end px-2 text-xs transition-colors"
+						onClick={() => abort()}
+						aria-label="Stop streaming (Ctrl+.)"
+						title="Stop streaming (Ctrl+.)"
+					>
+						<Square className="h-3 w-3" fill="currentColor" />
+						<span className="font-mono uppercase tracking-meta text-2xs">stop</span>
+					</button>
+					<button
+						type="button"
+						className="btn-primary h-7 w-7 p-0 self-end disabled:bg-line-strong"
+						onClick={send}
+						disabled={disabled || (draft.trim().length === 0 && images.length === 0)}
+						aria-label="Send"
+						title="Send"
+					>
+						<ArrowUp className="h-3.5 w-3.5" />
+					</button>
 				</div>
 
 				<div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 font-mono text-2xs text-ink-3">

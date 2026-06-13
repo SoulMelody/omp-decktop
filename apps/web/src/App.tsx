@@ -43,7 +43,7 @@ function useGlobalAbortShortcut(): void {
 		function onKey(e: KeyboardEvent): void {
 			const isStop = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === ".";
 			if (!isStop) return;
-			if (status !== "streaming" && status !== "retrying") return;
+			if (status !== "streaming" && status !== "retrying" && status !== "compacting") return;
 			e.preventDefault();
 			abort();
 		}
