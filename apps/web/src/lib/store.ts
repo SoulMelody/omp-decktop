@@ -63,6 +63,33 @@ function readChromeOpen(key: string, desktopFallback: boolean): boolean {
 	return readBool(key, desktopFallback);
 }
 
+/** Read the persisted open-tab list from localStorage. Returns an empty array
+ *  when nothing has been saved or the value is corrupt. Only restored on
+ *  desktop viewports — on mobile tabs are transient. */
+function readOpenTabs(): string[] {
+	if (!isDesktopViewport()) return [];
+	try {
+		const raw = localStorage.getItem("omp-deck:open-tabs");
+		if (!raw) return [];
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed) && parsed.every((v: unknown) => typeof v === "string")) {
+			return parsed as string[];
+		}
+	} catch {
+		/* quota / private browsing / corrupt data */
+	}
+	return [];
+}
+
+function writeOpenTabs(ids: string[]): void {
+	if (!isDesktopViewport()) return;
+	try {
+		localStorage.setItem("omp-deck:open-tabs", JSON.stringify(ids));
+	} catch {
+		/* quota / private browsing */
+	}
+}
+
 interface StoreState {
 	ws: WsClient | null;
 	wsStatus: WsStatus;
@@ -90,6 +117,15 @@ interface StoreState {
 
 	/** Composer pre-fill used by `Open in chat` from the Tasks view. */
 	pendingDraft?: { text: string };
+
+	/**
+	 * Ordered list of session IDs that are currently open as tabs in the
+	 * TabBar. Mirrors the Reasonix tab-order pattern: each entry maps to a
+	 * subscribed session, and the TabBar renders tabs in this order. Closing
+	 * a tab removes the ID; creating or selecting a session adds one.
+	 * Persisted to localStorage so tabs survive page reloads (desktop only).
+	 */
+	openTabs: string[];
 
 	/** Shared chrome state — each view can open/close the inspector and sidebar. */
 	sidebarOpen: boolean;
