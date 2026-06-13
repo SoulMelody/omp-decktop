@@ -1,6 +1,6 @@
 import type { AssistantMsg, ToolCallStream } from "@/lib/types";
 import { Markdown } from "@/lib/markdown";
-import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
+import { formatClockTime, formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolCallCard } from "../tools/ToolCallCard";
 
@@ -11,6 +11,9 @@ interface Props {
 
 export function AssistantMessage({ msg, toolCalls }: Props) {
 	const lastBlockIdx = msg.blocks.length - 1;
+	const endTime = msg.timestamp && msg.durationMs
+		? formatClockTime(msg.timestamp + msg.durationMs)
+		: undefined;
 
 	return (
 		<div className="space-y-2">
@@ -28,8 +31,12 @@ export function AssistantMessage({ msg, toolCalls }: Props) {
 						· {formatTokens(msg.usage.totalTokens)} tok · {formatCost(msg.usage.cost)}
 					</span>
 				) : null}
-				{msg.durationMs ? (
-					<span className="text-ink-4">· {formatDurationMs(msg.durationMs)}</span>
+				{endTime || msg.durationMs ? (
+					<span className="text-ink-4 ml-auto normal-case tracking-normal">
+						{endTime ? <span>{endTime}</span> : null}
+						{endTime && msg.durationMs ? <span className="mx-1">·</span> : null}
+						{msg.durationMs ? <span>{formatDurationMs(msg.durationMs)}</span> : null}
+					</span>
 				) : null}
 			</div>
 

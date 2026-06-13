@@ -472,6 +472,8 @@ function updateAssistantMessage(state: SessionUi, msg: any): SessionUi {
 				isStreaming: true,
 				model: typeof msg.model === "string" ? msg.model : m.model,
 				provider: typeof msg.provider === "string" ? msg.provider : m.provider,
+				// Set start timestamp on first streaming update if not already set
+				timestamp: m.timestamp ?? (typeof msg.timestamp === "number" ? msg.timestamp : Date.now()),
 			};
 			messages[i] = updated;
 			return { ...state, messages };
@@ -485,6 +487,7 @@ function updateAssistantMessage(state: SessionUi, msg: any): SessionUi {
 		isStreaming: true,
 		model: typeof msg.model === "string" ? msg.model : undefined,
 		provider: typeof msg.provider === "string" ? msg.provider : undefined,
+		timestamp: typeof msg.timestamp === "number" ? msg.timestamp : Date.now(),
 	});
 	return { ...state, messages };
 }
@@ -496,6 +499,16 @@ function finalizeMessage(state: SessionUi, msg: any): SessionUi {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const m = messages[i];
 		if (m && m.role === "assistant") {
+			// Resolve timestamp: prefer server-provided, fall back to the one
+			// captured during streaming updates, or stamp now as last resort.
+			const resolvedTimestamp = typeof msg.timestamp === "number"
+				? msg.timestamp
+				: m.timestamp ?? Date.now();
+			// Resolve duration: prefer server-provided, fall back to existing,
+			// or compute client-side from timestamp delta.
+			const resolvedDuration = typeof msg.duration === "number"
+				? msg.duration
+				: m.durationMs ?? (resolvedTimestamp ? Date.now() - resolvedTimestamp : undefined);
 			messages[i] = {
 				...m,
 				blocks: extractAssistantBlocks(msg.content),
@@ -505,8 +518,8 @@ function finalizeMessage(state: SessionUi, msg: any): SessionUi {
 				usage: extractUsage(msg.usage) ?? m.usage,
 				stopReason: typeof msg.stopReason === "string" ? msg.stopReason : m.stopReason,
 				errorMessage: typeof msg.errorMessage === "string" ? msg.errorMessage : m.errorMessage,
-				timestamp: typeof msg.timestamp === "number" ? msg.timestamp : m.timestamp,
-				durationMs: typeof msg.duration === "number" ? msg.duration : m.durationMs,
+				timestamp: resolvedTimestamp,
+				durationMs: resolvedDuration,
 				ttft: typeof msg.ttft === "number" ? msg.ttft : m.ttft,
 			};
 			const next = { ...state, messages };

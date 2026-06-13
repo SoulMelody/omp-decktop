@@ -47,3 +47,13 @@ export function truncate(text: string, max: number): string {
 	if (!text || text.length <= max) return text ?? "";
 	return `${text.slice(0, max - 1)}…`;
 }
+
+/** Format epoch-ms as a local HH:MM:SS clock string. */
+export function formatClockTime(epochMs: number | undefined): string {
+	if (!epochMs) return "";
+	const d = new Date(epochMs);
+	const h = d.getHours().toString().padStart(2, "0");
+	const m = d.getMinutes().toString().padStart(2, "0");
+	const s = d.getSeconds().toString().padStart(2, "0");
+	return `${h}:${m}:${s}`;
+}
