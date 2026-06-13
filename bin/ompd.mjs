@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // ompd — omp-deck with Chinese (zh-CN) localization (dev mode).
 //
-// Runs the l10n prepare step, then starts the Bun server (port 8787)
-// alongside the Vite dev server with the i18n config (port 5174, HMR).
-// Opens the Vite dev URL so source changes hot-reload instantly while
-// the zh-CN translations are baked into the generated source tree.
+// Runs the l10n prepare step, then starts the Bun server (port 8787),
+// a localization watcher for `.generated/web-root-i18n`, and the Vite
+// dev server with the i18n config (port 5174, HMR). Opens the Vite dev
+// URL so edits under `apps/web/src` propagate without manual refresh.
 
 import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
@@ -16,6 +16,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(HERE, "..");
 const SERVER_ENTRY = path.join(PKG_ROOT, "apps", "server", "src", "index.ts");
 const WEB_DIR = path.join(PKG_ROOT, "apps", "web");
+const L10N_WATCH_ENTRY = path.join(PKG_ROOT, "localization", "watch.ts");
 const STARTER_SKILLS = path.join(PKG_ROOT, "starter-skills");
 const STARTER_EXTENSIONS = path.join(PKG_ROOT, "starter-extensions");
 
@@ -109,6 +110,13 @@ function main() {
 	});
 	children.push(server);
 
+	const l10nWatch = spawn("bun", [L10N_WATCH_ENTRY], {
+		stdio: "inherit",
+		env,
+		cwd: PKG_ROOT,
+	});
+	children.push(l10nWatch);
+
 	// ── Vite dev server with i18n config (port 5174, HMR) ─────────────────
 	const vite = spawn("bun", ["run", "vite", "--config", "vite.i18n.config.ts"], {
 		stdio: "inherit",
@@ -129,6 +137,7 @@ function main() {
 	setTimeout(() => openBrowser(deckUrl), 3000);
 
 	console.log(`ompd: server on http://${host}:${serverPort}`);
+	console.log("ompd: l10n watcher active");
 	console.log(`ompd: vite   on ${deckUrl} (HMR)`);
 
 	let exited = 0;

@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { localizeNavRail, localizeSidebar, localizeNotificationPermissionBanner, localizeNotificationToast, localizeLayout } from "./transforms/components.js";
@@ -17,19 +17,57 @@ const repoRoot = process.cwd();
 const webRoot = path.join(repoRoot, "apps", "web");
 const generatedRoot = path.join(repoRoot, ".generated", "web-root-i18n");
 const generatedSrc = path.join(generatedRoot, "src");
+const webNodeModules = path.join(webRoot, "node_modules");
+const generatedNodeModules = path.join(generatedRoot, "node_modules");
 
-async function main(): Promise<void> {
-	await rm(generatedRoot, { recursive: true, force: true });
+export async function prepareLocalizedWebRoot(options?: { clean?: boolean }): Promise<void> {
+	if (options?.clean ?? true) {
+		await rm(generatedRoot, { recursive: true, force: true });
+	}
+
 	await mkdir(generatedRoot, { recursive: true });
-	await symlink(path.join(webRoot, "node_modules"), path.join(generatedRoot, "node_modules"), "junction");
+	await mkdir(generatedSrc, { recursive: true });
+	await ensureNodeModulesLink();
 
-	await cp(path.join(webRoot, "public"), path.join(generatedRoot, "public"), { recursive: true });
-	await cp(path.join(webRoot, "src"), generatedSrc, { recursive: true });
+	await syncDirectory(path.join(webRoot, "public"), path.join(generatedRoot, "public"));
+	await syncDirectory(path.join(webRoot, "src"), generatedSrc);
 
 	await rewriteGeneratedStyles();
 	await localizeGeneratedFiles();
 	await writeLocalizedIndexHtml();
 	await writeLocalizedMain();
+}
+
+async function syncDirectory(sourceDir: string, destDir: string): Promise<void> {
+	await mkdir(destDir, { recursive: true });
+	const entries = await readdir(sourceDir);
+	for (const entry of entries) {
+		await cp(path.join(sourceDir, entry), path.join(destDir, entry), {
+			recursive: true,
+			force: true,
+		});
+	}
+}
+
+async function ensureNodeModulesLink(): Promise<void> {
+	try {
+		const stat = await lstat(generatedNodeModules);
+		if (stat.isSymbolicLink() || stat.isDirectory()) return;
+		await rm(generatedNodeModules, { recursive: true, force: true });
+	} catch {
+		// missing is fine
+	}
+
+	try {
+		await symlink(webNodeModules, generatedNodeModules, "junction");
+	} catch (error) {
+		if (isAlreadyExists(error)) return;
+		throw error;
+	}
+}
+
+function isAlreadyExists(error: unknown): boolean {
+	return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "EEXIST";
 }
 
 async function rewriteGeneratedStyles(): Promise<void> {
@@ -86,7 +124,9 @@ async function writeLocalizedMain(): Promise<void> {
 	await writeFile(path.join(generatedSrc, "main.zh.tsx"), localizedMain, "utf8");
 }
 
-void main().catch((error) => {
-	console.error("[l10n:prepare] failed:", error);
-	process.exitCode = 1;
-});
+if (import.meta.main) {
+	void prepareLocalizedWebRoot({ clean: true }).catch((error) => {
+		console.error("[l10n:prepare] failed:", error);
+		process.exitCode = 1;
+	});
+}

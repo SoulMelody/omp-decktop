@@ -8,6 +8,7 @@ const repoRoot = path.resolve(__dirname, "../..");
 const webRoot = path.resolve(__dirname);
 const generatedRoot = path.resolve(repoRoot, ".generated", "web-root-i18n");
 const webNodeModules = path.resolve(webRoot, "node_modules");
+const bunNodeModules = path.resolve(repoRoot, "node_modules", ".bun");
 
 const SERVER_PORT = process.env.OMP_DECK_PORT ?? "8787";
 const SERVER_HOST = process.env.OMP_DECK_HOST ?? "127.0.0.1";
@@ -29,6 +30,14 @@ export default defineConfig({
 			"react/jsx-runtime": path.resolve(webNodeModules, "react", "jsx-runtime.js"),
 			"@fontsource": path.resolve(webNodeModules, "@fontsource"),
 			"highlight.js": path.resolve(webNodeModules, "highlight.js"),
+			"@xyflow/react": path.resolve(webNodeModules, "@xyflow", "react"),
+			"@xyflow/system": path.resolve(
+				bunNodeModules,
+				"@xyflow+system@0.0.76",
+				"node_modules",
+				"@xyflow",
+				"system",
+			),
 		},
 		dedupe: ["react", "react-dom", "i18next", "react-i18next"],
 	},
