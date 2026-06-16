@@ -1292,13 +1292,24 @@ function StartCommandCard() {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | undefined>();
 	const [status, setStatus] = useState<string | undefined>();
+	// Auto-start toggle: controls OMP_DECK_AUTO_START env var
+	const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+	const [autoStartSaving, setAutoStartSaving] = useState(false);
 
 	async function refresh(): Promise<void> {
 		try {
-			const next = await orientationApi.getStartCommand();
+			const [next, envResp] = await Promise.all([
+				orientationApi.getStartCommand(),
+				settingsApi.listEnv(),
+			]);
 			setData(next);
 			setDescription(next.description);
 			setBody(next.body);
+			// Determine auto-start state from env
+			const entry = envResp.entries.find((e: EnvEntry) => e.key === "OMP_DECK_AUTO_START");
+			const raw = entry?.masked ?? "";
+			const trimmed = raw.trim();
+			setAutoStartEnabled(entry?.isSet === true && trimmed !== "" && trimmed !== "0" && trimmed.toLowerCase() !== "false");
 			setError(undefined);
 		} catch (e) {
 			setError(String(e));
@@ -1310,6 +1321,22 @@ function StartCommandCard() {
 	useEffect(() => {
 		void refresh();
 	}, []);
+
+	async function toggleAutoStart(enabled: boolean): Promise<void> {
+		setAutoStartSaving(true);
+		try {
+			await settingsApi.patchEnv({
+				OMP_DECK_AUTO_START: enabled ? "/start" : "",
+			});
+			setAutoStartEnabled(enabled);
+			setStatus(enabled ? "Auto-start enabled. New sessions will fire /start." : "Auto-start disabled. New sessions will open silently.");
+			window.setTimeout(() => setStatus(undefined), 3000);
+		} catch (e) {
+			setError(String(e));
+		} finally {
+			setAutoStartSaving(false);
+		}
+	}
 
 	const dirty = data ? description !== data.description || body !== data.body : false;
 
@@ -1336,12 +1363,24 @@ function StartCommandCard() {
 				<div className="flex items-center gap-2">
 					<div className="meta">/start orchestrator</div>
 					{data?.exists ? <Badge tone="default">on disk</Badge> : <Badge tone="warn">missing</Badge>}
+					<span className="ml-auto" />
+					<label className="flex items-center gap-2 text-xs text-ink-2">
+						<input
+							type="checkbox"
+							checked={autoStartEnabled}
+							disabled={autoStartSaving}
+							onChange={(e) => void toggleAutoStart(e.target.checked)}
+						/>
+						<span>Auto-start on new session</span>
+					</label>
 				</div>
 				<p className="mt-1 text-xs text-ink-3">
 					First user message fired on session boot. Re-read every invocation,
 					so saves take effect immediately. Numbered procedures here outrank
-					prelude imperatives by recency&mdash; put DO-THIS instructions in this
-					body, not in the prelude above.
+					prelude imperatives by recency&mdash;put DO-THIS instructions in this
+					body, not in the prelude above. Toggle &ldquo;Auto-start&rdquo; to
+					control whether <code className="font-mono">/start</code> fires
+					automatically on every new session.
 				</p>
 				<div className="mt-1 font-mono text-2xs text-ink-3">
 					{data?.path ?? "..."}

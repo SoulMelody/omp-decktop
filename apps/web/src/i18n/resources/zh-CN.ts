@@ -182,11 +182,12 @@ const zhCN = {
 			title: "/start 编排器",
 			onDisk: "在磁盘上",
 			missing: "缺失",
-			desc: "会话启动时发送的第一条用户消息。每次调用都会重新读取，因此保存会立即生效。此处的编号过程优先级高于前言指令——请将 DO-THIS 指令放在此处，而非上方的前言中。",
+			desc: "会话启动时发送的第一条用户消息。每次调用都会重新读取，因此保存会立即生效。此处的编号过程优先级高于前言指令——请将 DO-THIS 指令放在此处，而非上方的前言中。切换“自动启动”以控制 /start 是否在每个新会话时自动触发。",
 			saved: "已保存。下次 /start 调用将使用此内容。",
 			placeholder: "一行摘要（frontmatter description:）",
 			descriptionLabel: "描述",
 			bodyLabel: "正文",
+			autoStart: "新会话时自动启动",
 		},
 		maintenance: {
 			gate: "维护门控",

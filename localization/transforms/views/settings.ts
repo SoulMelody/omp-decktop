@@ -204,7 +204,7 @@ export function localizeSettingsView(source: string): string {
 	next = replaceOne(next, '<Badge tone="warn">missing</Badge>', `<Badge tone="warn">{t("settings.startOrchestrator.missing")}</Badge>`, "SettingsView: start missing");
 	next = replaceOne(
 		next,
-		/<p className="mt-1 text-xs text-ink-3">\s*First user message fired on session boot\. Re-read every invocation,\s*so saves take effect immediately\. Numbered procedures here outrank\s*prelude imperatives by recency&mdash; put DO-THIS instructions in this\s*body, not in the prelude above\.\s*<\/p>/,
+		/<p className="mt-1 text-xs text-ink-3">\s*First user message fired on session boot\. Re-read every invocation,\s*so saves take effect immediately\. Numbered procedures here outrank\s*prelude imperatives by recency&mdash;put DO-THIS instructions in this\s*body, not in the prelude above\. Toggle &ldquo;Auto-start&rdquo; to\s*control whether <code className="font-mono">\/start<\/code> fires\s*automatically on every new session\.\s*<\/p>/,
 		`<p className="mt-1 text-xs text-ink-3">{t("settings.startOrchestrator.desc")}</p>`,
 		"SettingsView: start desc",
 	);
@@ -212,6 +212,7 @@ export function localizeSettingsView(source: string): string {
 	next = replaceOne(next, 'placeholder="One-line summary (frontmatter description:)"', `placeholder={t("settings.startOrchestrator.placeholder")}`, "SettingsView: start placeholder");
 	next = replaceOne(next, '<span className="meta">description</span>', `<span className="meta">{t("settings.startOrchestrator.descriptionLabel")}</span>`, "SettingsView: start description label");
 	next = replaceOne(next, '<span className="meta">body</span>', `<span className="meta">{t("settings.startOrchestrator.bodyLabel")}</span>`, "SettingsView: start body label");
+	next = replaceOne(next, '<span>Auto-start on new session</span>', `<span>{t("settings.startOrchestrator.autoStart")}</span>`, "SettingsView: start auto-start label");
 
 	// ── Maintenance gate ──
 	next = replaceOne(next, '<div className="meta">Maintenance gate</div>', `<div className="meta">{t("settings.maintenance.gate")}</div>`, "SettingsView: maintenance gate");

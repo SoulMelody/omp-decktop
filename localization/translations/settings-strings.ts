@@ -151,7 +151,8 @@ export const SETTINGS_START_DESC = `<p className="mt-1 text-xs text-ink-3">
 					First user message fired on session boot. Re-read every invocation,
 					so saves take effect immediately. Numbered procedures here outrank
 					prelude imperatives by recency— put DO-THIS instructions in this
-					body, not in the prelude above.
+					body, not in the prelude above. Toggle "Auto-start" to
+					control whether /start fires automatically on every new session.
 				</p>`;
 
 export const SETTINGS_START_SAVED = `"Saved. Next /start invocation will use this body."`;
