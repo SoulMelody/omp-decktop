@@ -16,6 +16,7 @@ export class WsClient {
 	private status: WsStatus = "closed";
 	private url: string;
 	private closed = false;
+	private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(url?: string) {
 		const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -59,8 +60,33 @@ export class WsClient {
 		sock.addEventListener("error", () => sock.close());
 	}
 
+	/**
+	 * Force-close the current socket and trigger the reconnect pipeline.
+	 * Used by the heartbeat watchdog when the connection appears stale
+	 * (no heartbeat for >15s) even though readyState is still OPEN.
+	 */
+	forceReconnect(): void {
+		if (this.closed) return;
+		if (this.heartbeatTimer) {
+			clearInterval(this.heartbeatTimer);
+			this.heartbeatTimer = null;
+		}
+		const sock = this.socket;
+		if (sock) {
+			// Close triggers onTeardown → scheduleReconnect automatically.
+			try { sock.close(); } catch { /* already closed */ }
+		} else {
+			// No socket — connect directly.
+			this.connect();
+		}
+	}
+
 	dispose(): void {
 		this.closed = true;
+		if (this.heartbeatTimer) {
+			clearInterval(this.heartbeatTimer);
+			this.heartbeatTimer = null;
+		}
 		if (this.retryTimer) {
 			clearTimeout(this.retryTimer);
 			this.retryTimer = null;
@@ -95,6 +121,26 @@ export class WsClient {
 
 	getStatus(): WsStatus {
 		return this.status;
+	}
+
+	/**
+	 * Arm the heartbeat watchdog. If no heartbeat frame arrives within
+	 * `timeoutMs`, force-close the socket and trigger reconnection.
+	 * The store calls this each time it receives a heartbeat frame.
+	 */
+	resetHeartbeatTimer(timeoutMs: number, onTimeout: () => void): void {
+		if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+		this.heartbeatTimer = setInterval(() => {
+			onTimeout();
+		}, timeoutMs);
+	}
+
+	/** Cancel the heartbeat watchdog timer without triggering a reconnect. */
+	clearHeartbeatTimer(): void {
+		if (this.heartbeatTimer) {
+			clearInterval(this.heartbeatTimer);
+			this.heartbeatTimer = null;
+		}
 	}
 
 	private setStatus(s: WsStatus): void {

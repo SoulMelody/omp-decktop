@@ -429,5 +429,13 @@ export class WsHub {
 }
 
 function send(ws: ServerWebSocket<ConnectionData>, frame: ServerFrame): void {
+	// Guard against sending on a closed/half-closed socket. Bun's ws.send()
+	// returns `false` (or throws) when the buffer is full or the socket is
+	// closed; checking readyState avoids silently dropping frames when the
+	// connection is in CLOSING/CLOSED state but hasn't fired `onClose` yet.
+	if (ws.readyState !== 1 /* WebSocket.OPEN */) {
+		log.warn(`send skipped: ws not open (readyState=${ws.readyState})`);
+		return;
+	}
 	ws.send(JSON.stringify(frame));
 }

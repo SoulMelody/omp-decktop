@@ -97,7 +97,9 @@ export class InProcessAgentBridge implements AgentBridge {
 	} = {}) {
 		this.idleTimeoutMs = opts.idleTimeoutMs ?? 15 * 60_000; // 15 min default
 		this.reapIntervalMs = opts.reapIntervalMs ?? 60_000; // scan once a minute
-		this.autoStartCommand = opts.autoStartCommand ?? "/start";
+		// Distinguish `null` (explicitly disabled via config/env) from `undefined`
+		// (not supplied — fall back to "/start" default for backward compat).
+		this.autoStartCommand = opts.autoStartCommand === undefined ? "/start" : opts.autoStartCommand;
 		if (this.idleTimeoutMs > 0) this.startReaper();
 	}
 

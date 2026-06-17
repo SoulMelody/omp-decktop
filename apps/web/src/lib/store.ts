@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
 import type {
+	AgentSessionEventJson,
 	ExtUiDialogResponse,
 	ListSessionsResponse,
 	ListWorkspacesResponse,
@@ -39,6 +40,63 @@ import { api } from "./api";
 import { applyEvent, initSession } from "./reducer";
 import type { SessionUi } from "./types";
 import { WsClient, type WsStatus } from "./ws";
+
+// ─── Render batching for session events ────────────────────────────────────
+//
+// The SDK fires `message_update` once per streaming chunk (often a single
+// token). Without batching each event triggers a full Zustand state update,
+// a React re-render, and — most expensively — a complete ReactMarkdown parse
+// + rehype-highlight pass over the entire message text. By coalescing events
+// into one `requestAnimationFrame` flush we cut render count by 5–10× during
+// fast streaming while adding at most one frame (~16 ms) of latency.
+
+interface _PendingEvent {
+	sessionId: string;
+	event: AgentSessionEventJson;
+}
+
+type _SetFn = (fn: (s: StoreState) => Partial<StoreState>) => void;
+
+let _batchQueue: _PendingEvent[] = [];
+let _batchRafId: number | null = null;
+
+function _enqueueSessionEvent(
+	sessionId: string,
+	event: AgentSessionEventJson,
+	set: _SetFn,
+	get: () => StoreState,
+): void {
+	_batchQueue.push({ sessionId, event });
+	if (_batchRafId === null) {
+		_batchRafId = requestAnimationFrame(() => {
+			_batchRafId = null;
+			_flushBatch(set, get);
+		});
+	}
+}
+
+function _flushBatch(set: _SetFn, get: () => StoreState): void {
+	const events = _batchQueue;
+	_batchQueue = [];
+	if (events.length === 0) return;
+	set((s) => {
+		const sessionsById = { ...s.sessionsById };
+		for (const { sessionId, event } of events) {
+			const prev = sessionsById[sessionId];
+			if (!prev) continue;
+			sessionsById[sessionId] = applyEvent(prev, event);
+		}
+		return { sessionsById };
+	});
+}
+
+/**
+ * Heartbeat watchdog timeout. Server broadcasts heartbeats every 5s; if
+ * none arrives within this window the connection is likely a zombie
+ * (browser-throttled background tab, silent network failure) and we
+ * force a reconnect. Three missed heartbeats (15s) + margin.
+ */
+const HEARTBEAT_STALE_MS = 18_000;
 
 function readBool(key: string, fallback: boolean): boolean {
 	if (typeof localStorage === "undefined") return fallback;
@@ -280,6 +338,7 @@ export const useStore = create<StoreState>()(
 		pendingDialogs: {},
 		heartbeat: null,
 		notifications: [],
+		openTabs: readOpenTabs(),
 		// Hydrate chrome state from localStorage at module init so first render
 		// matches the user's last preference — but only on desktop. On mobile the
 		// panels are overlay drawers and always start closed.
@@ -306,9 +365,19 @@ export const useStore = create<StoreState>()(
 					const ws = get().ws;
 					if (!ws) return;
 					// If the socket was closed while backgrounded, force reconnect.
-					if (ws.getStatus() === "closed") {
-						get().disconnect();
-						get().connect();
+					// Also check heartbeat staleness — the socket may report OPEN
+					// but be a zombie connection (common on mobile/background tabs).
+					const hb = get().heartbeat;
+					const isStale = hb != null && Date.now() - hb.lastReceivedAtMs > HEARTBEAT_STALE_MS;
+					if (ws.getStatus() === "closed" || isStale) {
+						stopHeartbeatTimer(ws);
+						if (isStale && ws.getStatus() !== "closed") {
+							// Zombie connection — force close & reconnect.
+							ws.forceReconnect();
+						} else {
+							get().disconnect();
+							get().connect();
+						}
 						// Re-subscribe to active session after reconnect.
 						const aid = get().activeId;
 						if (aid && !get().subscribed.has(aid)) {
@@ -329,9 +398,11 @@ export const useStore = create<StoreState>()(
 			ws.subscribe((frame) => handleFrame(frame, set, get));
 			ws.connect();
 			set({ ws });
+			armHeartbeatWatchdog(ws, set, get);
 		},
 
 		disconnect() {
+			stopHeartbeatTimer(get().ws);
 			get().ws?.dispose();
 			set({ ws: null, wsStatus: "closed" });
 		},
@@ -598,12 +669,14 @@ function handleFrame(
 			return;
 
 		case "session_event": {
-			set((s) => {
-				const prev = s.sessionsById[frame.sessionId];
-				if (!prev) return {};
-				const next = applyEvent(prev, frame.event);
-				return { sessionsById: { ...s.sessionsById, [frame.sessionId]: next } };
-			});
+			// Batch through rAF to coalesce rapid streaming updates into a
+			// single React render per animation frame (see _enqueueSessionEvent).
+			_enqueueSessionEvent(
+				frame.sessionId,
+				frame.event,
+				set as _SetFn,
+				get,
+			);
 			return;
 		}
 
@@ -729,6 +802,12 @@ function handleFrame(
 					version: frame.version,
 				},
 			}));
+			// Reset watchdog on every heartbeat — if the next one doesn't
+			// arrive within HEARTBEAT_STALE_MS, force a reconnect.
+			{
+				const ws = get().ws;
+				if (ws) armHeartbeatWatchdog(ws, set, get);
+			}
 			return;
 
 		case "notification":
@@ -759,6 +838,33 @@ function handleFrame(
 		default:
 			return;
 	}
+}
+
+// ─── Heartbeat watchdog ─────────────────────────────────────────────────────
+
+function stopHeartbeatTimer(ws: WsClient | null): void {
+	ws?.clearHeartbeatTimer();
+}
+
+/**
+ * Arm (or re-arm) the heartbeat watchdog on the WsClient. If no heartbeat
+ * frame arrives within HEARTBEAT_STALE_MS, force-close the socket and
+ * trigger automatic reconnection. This catches zombie connections where
+ * the browser reports the socket as OPEN but no data flows (common in
+ * background tabs or after network changes).
+ */
+function armHeartbeatWatchdog(
+	ws: WsClient,
+	set: (partial: Partial<StoreState> | ((s: StoreState) => Partial<StoreState>)) => void,
+	get: () => StoreState,
+): void {
+	ws.resetHeartbeatTimer(HEARTBEAT_STALE_MS, () => {
+		const currentWs = get().ws;
+		if (currentWs !== ws) return; // ws was replaced
+		if (currentWs.getStatus() === "closed") return; // already reconnecting
+		console.warn("[omp-deck] heartbeat stale — forcing reconnect");
+		currentWs.forceReconnect();
+	});
 }
 
 // Selectors ────────────────────────────────────────────────────────────────

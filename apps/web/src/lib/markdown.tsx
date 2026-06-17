@@ -12,11 +12,17 @@ interface Props {
 }
 
 export const Markdown = memo(function Markdown({ children, className, streaming }: Props) {
+	// Skip rehype-highlight during streaming — language detection + full
+	// syntax highlighting on every token is the biggest render bottleneck.
+	// The final render (after message_end) re-enables it for polished output.
+	const rehypePlugins = streaming
+		? undefined
+		: [[rehypeHighlight, { detect: true, ignoreMissing: true }] as any];
 	return (
 		<div className={cn("markdown text-sm", streaming && "cursor-blink", className)}>
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
-				rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+				rehypePlugins={rehypePlugins}
 				components={{ pre: CopyablePre, a: ExternalAnchor }}
 			>
 				{children}
