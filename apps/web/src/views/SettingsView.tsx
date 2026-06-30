@@ -96,11 +96,11 @@ export function SettingsView() {
 								<OrientationSection />
 							) : selected === "appearance" ? (
 								<AppearanceSection />
-			) : selected === "notifications" ? (
-				<NotificationsSection />
-			) : selected === "modelRoles" ? (
-				<ModelRolesSection />
-			) : (
+							) : selected === "notifications" ? (
+								<NotificationsSection />
+							) : selected === "modelRoles" ? (
+								<ModelRolesSection />
+							) : (
 								<StubSection section={selected} />
 							)}
 						</section>
@@ -1682,7 +1682,7 @@ function GateKnobInput({
 	);
 }
 
-function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications"> }) {
+function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications" | "modelRoles"> }) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
 	return (
 		<div className="mx-auto max-w-3xl rounded-md border border-dashed border-line bg-paper-2 p-6">

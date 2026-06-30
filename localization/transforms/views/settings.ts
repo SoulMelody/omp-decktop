@@ -48,7 +48,11 @@ export function localizeSettingsView(source: string): string {
 		next,
 		`) : selected === "appearance" ? (
 \t\t\t\t\t\t\t\t<AppearanceSection />
-\t\t\t\t\t\t\t) : selected === "notifications" ? (`,
+\t\t\t\t\t\t\t) : selected === "notifications" ? (
+\t\t\t\t\t\t\t\t<NotificationsSection />
+\t\t\t\t\t\t\t) : selected === "modelRoles" ? (
+\t\t\t\t\t\t\t\t<ModelRolesSection />
+\t\t\t\t\t\t\t) : (`,
 		SETTINGS_LANG_BRANCH,
 		"SettingsView: language section branch",
 	);
@@ -71,7 +75,7 @@ export function localizeSettingsView(source: string): string {
 	next = replaceOne(next, '<h2 className="meta">Providers</h2>', SETTINGS_PROVIDERS_META, "SettingsView: providers meta");
 	next = replaceOne(
 		next,
-		'function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications"> }) {',
+		'function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications" | "modelRoles"> }) {',
 		`${LANGUAGE_SECTION_CODE}\n\n${SETTINGS_STUB_SECTION_SIG}`,
 		"SettingsView: insert language section",
 	);

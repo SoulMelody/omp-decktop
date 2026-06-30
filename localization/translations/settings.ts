@@ -46,10 +46,14 @@ export const SETTINGS_PROVIDERS_LOADING = `if (loading) {
 export const SETTINGS_PROVIDERS_META = `<h2 className="meta">${ZH_SETTINGS_TEXT.providersMeta}</h2>`;
 
 export const SETTINGS_LANG_BRANCH = `) : selected === "appearance" ? (
-\t\t\t\t\t\t\t\t<AppearanceSection />
-\t\t\t\t\t\t\t) : selected === "language" ? (
-\t\t\t\t\t\t\t\t<LanguageSection />
-\t\t\t\t\t\t\t) : selected === "notifications" ? (`;
+								<AppearanceSection />
+							) : selected === "language" ? (
+								<LanguageSection />
+							) : selected === "notifications" ? (
+								<NotificationsSection />
+							) : selected === "modelRoles" ? (
+								<ModelRolesSection />
+							) : (`;
 
 export const LANGUAGE_SECTION_CODE = `function LanguageSection() {
 \tconst { locale, setLocale } = useLocale();
@@ -89,4 +93,4 @@ export const LANGUAGE_SECTION_CODE = `function LanguageSection() {
 \t);
 }`;
 
-export const SETTINGS_STUB_SECTION_SIG = `function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications" | "language"> }) {`;
+export const SETTINGS_STUB_SECTION_SIG = 'function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications" | "language" | "modelRoles"> }) {';
