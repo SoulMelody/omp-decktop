@@ -71,7 +71,7 @@ export function localizeSidebar(source: string): string {
 	next = replaceOne(next, />\s*No sessions yet\.\s*</, SIDEBAR_NO_SESSIONS, "Sidebar: empty state");
 	next = replaceOne(
 		next,
-		/onClick: \(\) => void;\n\}\) \{\n\treturn \(/,
+		/onClick: \(\) => void;\n\s*onDelete\?: \(\) => void;\n\}\) \{\n\treturn \(/,
 		SIDEBAR_SESSION_ROW_HOOK,
 		"Sidebar: inject SessionRow translation hook",
 	);

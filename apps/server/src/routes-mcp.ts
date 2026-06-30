@@ -99,56 +99,58 @@ async function testStdio(
 		child.stdin.write(new TextEncoder().encode(initMsg));
 		child.stdin.end();
 
-		// Read all stdout as text, with timeout
-		let stdoutText = "";
-		const stdoutPromise = (async () => {
-			// Bun's ReadableStream: collect all chunks
-			const reader = child.stdout.getReader();
-			while (true) {
-				const chunk = await reader.read();
-				if (chunk.done) break;
-				if (chunk.value) stdoutText += new TextDecoder().decode(chunk.value);
-			}
-		})();
-
+		// Read stdout until we get a complete JSON-RPC initialize response,
+		// or the process exits, or the timeout fires. MCP servers are
+		// long-running, so we can't wait for process exit.
 		const timeout = new Promise<"timeout">((resolve) =>
 			setTimeout(() => resolve("timeout"), TIMEOUT),
 		);
-		const exited = child.exited;
-		const result = await Promise.race([
-			Promise.all([stdoutPromise, exited]).then(() => "exited" as const),
-			timeout,
-		]);
 
-		if (result === "timeout") {
+		// Read stdout byte by byte and try to parse a JSON-RPC message
+		// with id=1. When found, stop reading and kill the child.
+		const readPromise = (async () => {
+			const reader = child.stdout.getReader();
+			let buf = "";
+			while (true) {
+				const chunk = await reader.read();
+				if (chunk.done) break;
+				if (chunk.value) buf += new TextDecoder().decode(chunk.value);
+				// Try to extract a complete JSON-RPC response (one per line)
+				const lines = buf.split("\n");
+				// Keep the last incomplete line in the buffer
+				buf = lines.length > 1 ? (lines.pop() ?? "") : buf;
+				for (const line of lines) {
+					const trimmed = line.trim();
+					if (!trimmed) continue;
+					try {
+						const msg = JSON.parse(trimmed);
+						if (msg.id === 1 || msg.id === 2) {
+							return msg;
+						}
+					} catch { /* skip non-JSON */ }
+				}
+			}
+			return null;
+		})();
+
+		const msg = await Promise.race([readPromise, timeout]);
+
+		if (msg === "timeout") {
 			try { child.kill(); } catch { /* ignore */ }
 			return { ok: false, serverName: name, error: "Timed out" };
 		}
 
-		// Parse JSON-RPC responses from stdout
-		const lines = stdoutText.split("\n").filter((l: string) => l.trim());
-		let initResponse: Record<string, unknown> | null = null;
-		let listResponse: Record<string, unknown> | null = null;
-
-		for (const line of lines) {
-			try {
-				const msg = JSON.parse(line.trim());
-				if (msg.id === 1) initResponse = msg;
-				if (msg.id === 2) listResponse = msg;
-			} catch { /* skip non-JSON */ }
-		}
-
-		if (!initResponse) {
+		if (!msg) {
 			return { ok: false, serverName: name, error: "No initialize response received" };
 		}
 
-		if (initResponse.error) {
-			const em = (initResponse.error as Record<string, unknown>)?.message ?? JSON.stringify(initResponse.error);
+		if (msg.error) {
+			const em = (msg.error as Record<string, unknown>)?.message ?? JSON.stringify(msg.error);
 			return { ok: false, serverName: name, error: `Initialize error: ${String(em)}` };
 		}
 
 		const tools: string[] = [];
-		const caps = initResponse.result as Record<string, unknown> | undefined;
+		const caps = msg.result as Record<string, unknown> | undefined;
 
 		// If server advertises tools, try tools/list
 		if (caps?.capabilities && (caps.capabilities as Record<string, unknown>)?.tools) {
@@ -178,28 +180,32 @@ async function testStdio(
 			child2.stdin.write(new TextEncoder().encode(listMsg));
 			child2.stdin.end();
 
+			// Read byte by byte looking for JSON-RPC response with id=2
 			let out2 = "";
 			const r2 = child2.stdout.getReader();
-			const timeout2 = setTimeout(() => { try { child2.kill(); } catch { /* ignore */ } }, 5000);
+			const listTimer = setTimeout(() => { try { child2.kill(); } catch { /* ignore */ } }, 5000);
 			while (true) {
 				const c = await r2.read();
 				if (c.done) break;
 				if (c.value) out2 += new TextDecoder().decode(c.value);
-			}
-			clearTimeout(timeout2);
-			try { child2.kill(); } catch { /* ignore */ }
-
-			for (const line of out2.split("\n")) {
-				const trimmed = line.trim();
-				if (!trimmed) continue;
-				try {
-					const msg = JSON.parse(trimmed);
-					if (msg.id === 2 && msg.result?.tools) {
-						for (const t of msg.result.tools as Array<{ name?: string }>) {
-							if (t.name) tools.push(t.name);
+				// Check if we got a complete response
+				for (const line of out2.split("\n")) {
+					const trimmed = line.trim();
+					if (!trimmed) continue;
+					try {
+						const parsed = JSON.parse(trimmed);
+						if (parsed.id === 2) {
+							clearTimeout(listTimer);
+							if (parsed.result?.tools) {
+								for (const t of parsed.result.tools as Array<{ name?: string }>) {
+									if (t.name) tools.push(t.name);
+								}
+							}
+							try { child2.kill(); } catch { /* ignore */ }
+							return { ok: true, serverName: name, tools };
 						}
-					}
-				} catch { /* skip */ }
+					} catch { /* skip */ }
+				}
 			}
 		}
 
