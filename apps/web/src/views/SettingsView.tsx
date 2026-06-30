@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { OAuthFlowModal } from "@/components/settings/OAuthFlowModal";
+import { ModelRolesSection } from "@/components/settings/ModelRolesSection";
 import { bridgesApi } from "@/lib/bridges-api";
 import { settingsApi } from "@/lib/settings-api";
 import { orientationApi } from "@/lib/orientation-api";
@@ -39,6 +40,7 @@ const SECTIONS = [
 	{ id: "appearance", label: "Appearance", description: "Themes, colors, fonts" },
 	{ id: "workspaces", label: "Workspaces", description: "Pinned roots and display names" },
 	{ id: "notifications", label: "Notifications", description: "Idle alerts and quiet hours" },
+	{ id: "modelRoles", label: "Model Roles", description: "Role-specific model routing" },
 	{ id: "about", label: "About", description: "Version, paths, diagnostics" },
 ] as const;
 
@@ -94,9 +96,11 @@ export function SettingsView() {
 								<OrientationSection />
 							) : selected === "appearance" ? (
 								<AppearanceSection />
-							) : selected === "notifications" ? (
-								<NotificationsSection />
-							) : (
+			) : selected === "notifications" ? (
+				<NotificationsSection />
+			) : selected === "modelRoles" ? (
+				<ModelRolesSection />
+			) : (
 								<StubSection section={selected} />
 							)}
 						</section>
