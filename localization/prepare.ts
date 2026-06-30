@@ -22,7 +22,11 @@ const generatedNodeModules = path.join(generatedRoot, "node_modules");
 
 export async function prepareLocalizedWebRoot(options?: { clean?: boolean }): Promise<void> {
 	if (options?.clean ?? true) {
-		await rm(generatedRoot, { recursive: true, force: true });
+		try {
+			await rm(generatedRoot, { recursive: true, force: true });
+		} catch {
+			// Windows: symlinked node_modules may fail to remove; syncDirectory will overwrite stale files
+		}
 	}
 
 	await mkdir(generatedRoot, { recursive: true });
