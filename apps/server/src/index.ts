@@ -124,6 +124,9 @@ async function main(): Promise<void> {
 	server = Bun.serve<ConnectionData>({
 		hostname: config.host,
 		port: config.port,
+		// MCP connection tests may spawn package managers (deno/npm/bunx) on first
+		// run and exceed Bun's default 10s HTTP idle timeout.
+		idleTimeout: 120,
 		fetch(req, srv) {
 			const url = new URL(req.url);
 
