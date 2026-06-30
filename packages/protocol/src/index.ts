@@ -259,6 +259,29 @@ export interface ListModelsResponse {
 	active?: ModelRef;
 }
 
+// ─── Model Roles ────────────────────────────────────────────────────────────
+
+/** One entry in the model-role catalog. */
+export interface ModelRoleEntry {
+	key: string;
+	label: string;
+	description: string;
+	/** Explicit model ID, or undefined when inheriting. */
+	modelId?: string;
+}
+
+/** Response for GET /api/settings/model-roles */
+export interface ModelRolesResponse {
+	roles: ModelRoleEntry[];
+	models: ModelInfo[];
+	configPath: string;
+}
+
+/** Request body for PUT /api/settings/model-roles */
+export interface UpdateModelRolesRequest {
+	roles: Record<string, string | null>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Onboarding (first-run wizard)
 // ─────────────────────────────────────────────────────────────────────────────
