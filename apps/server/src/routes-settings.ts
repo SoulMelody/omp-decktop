@@ -123,7 +123,7 @@ export function buildSettingsRouter(
 
 		let models: ModelInfo[] = [];
 		try {
-			models = await bridge.listModels();
+			models = await bridge.listModels({ ensureOnlineRefresh: true });
 		} catch {
 			// models stay empty; UI should degrade gracefully
 		}

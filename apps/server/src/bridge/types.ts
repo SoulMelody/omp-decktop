@@ -32,7 +32,7 @@ export interface AgentBridge {
 	/** Hot-apply runtime env values that do not require process restart. */
 	applyEnvUpdate?(update: RuntimeEnvUpdate): void;
 	/** Catalog of models the SDK knows about, plus a marker on the current one when sessionId is given. */
-	listModels(opts?: { sessionId?: string }): Promise<ModelInfo[]>;
+	listModels(opts?: { sessionId?: string; ensureOnlineRefresh?: boolean }): Promise<ModelInfo[]>;
 	/**
 	 * Subscribe to extension-UI dialog frames for `sessionId` (open + cancel).
 	 * Returns an unsubscribe function. Implementations MAY immediately replay

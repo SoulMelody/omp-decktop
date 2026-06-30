@@ -181,8 +181,9 @@ export class InProcessAgentBridge implements AgentBridge {
 		return this.modelRegistryPromise;
 	}
 
-	async listModels(opts: { sessionId?: string } = {}): Promise<ModelInfo[]> {
+	async listModels(opts: { sessionId?: string; ensureOnlineRefresh?: boolean } = {}): Promise<ModelInfo[]> {
 		const registry = await this.ensureModelRegistry();
+		if (opts.ensureOnlineRefresh) await registry.refresh("online");
 		const current = opts.sessionId ? this.active.get(opts.sessionId)?.handle.snapshot().model : undefined;
 		return registry.getAll().map((model) => modelInfoFromSdk(model as unknown as SdkModel, registry, current));
 	}
