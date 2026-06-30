@@ -1,4 +1,4 @@
-export const ZH_SETTINGS_SECTIONS = `const SECTIONS = [
+export const ZH_SETTINGS_SECTIONS = `export const SECTIONS = [
 	{ id: "env", label: "环境变量", description: "进程及 Deck 管理的变量" },
 	{ id: "providers", label: "服务商", description: "OAuth 登录与 API 密钥状态" },
 	{ id: "messaging", label: "消息桥接", description: "Telegram 及未来的聊天桥接" },
