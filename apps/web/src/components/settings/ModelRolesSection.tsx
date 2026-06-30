@@ -87,7 +87,7 @@ export function ModelRolesSection() {
 	const modelGroups = (() => {
 		if (!roles?.models?.length) return [];
 		const byProvider = new Map<string, ModelInfo[]>();
-		for (const m of roles.models) {
+		for (const m of roles.models.filter((m) => m.isAvailable)) {
 			const list = byProvider.get(m.provider) ?? [];
 			list.push(m);
 			byProvider.set(m.provider, list);
