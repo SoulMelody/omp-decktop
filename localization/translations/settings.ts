@@ -7,6 +7,7 @@ export const ZH_SETTINGS_SECTIONS = `const SECTIONS = [
 	{ id: "language", label: "语言", description: "界面显示语言" },
 	{ id: "workspaces", label: "工作区", description: "固定根目录与显示名称" },
 	{ id: "notifications", label: "通知", description: "空闲提醒与免打扰时段" },
+	{ id: "modelRoles", label: "模型角色", description: "按角色分配模型路由" },
 	{ id: "about", label: "关于", description: "版本、路径、诊断信息" },
 ] as const;`;
 
@@ -44,17 +45,15 @@ export const SETTINGS_PROVIDERS_LOADING = `if (loading) {
 \t\treturn <div className="font-mono text-2xs text-ink-3">${ZH_SETTINGS_TEXT.providersLoading}</div>;
 \t}`;
 export const SETTINGS_PROVIDERS_META = `<h2 className="meta">${ZH_SETTINGS_TEXT.providersMeta}</h2>`;
-
-export const SETTINGS_LANG_BRANCH = `) : selected === "appearance" ? (
-								<AppearanceSection />
+export const SETTINGS_LANG_BRANCH = `) : selected === "notifications" ? (
+								<NotificationsSection />
 							) : selected === "language" ? (
 								<LanguageSection />
-							) : selected === "notifications" ? (
-								<NotificationsSection />
 							) : selected === "modelRoles" ? (
 								<ModelRolesSection />
-							) : (`;
-
+							) : (
+								<StubSection section={selected} />
+							)}`;
 export const LANGUAGE_SECTION_CODE = `function LanguageSection() {
 \tconst { locale, setLocale } = useLocale();
 \treturn (

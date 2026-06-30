@@ -28,6 +28,7 @@ import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import { KbProtocolHandler } from "./kb-protocol.ts";
 import { installStarterSkills } from "./starter-skills.ts";
 import { installStarterExtensions } from "./starter-extensions.ts";
+import { Settings } from "@oh-my-pi/pi-coding-agent";
 import { buildDefaultBridgeSupervisor } from "./bridge-supervisor.ts";
 import {
 	BrowserNotificationChannel,
@@ -95,6 +96,11 @@ async function main(): Promise<void> {
 	// (telegram, email, push) self-register here without engine changes.
 	notificationService.register(new BrowserNotificationChannel());
 
+	// Initialize the SDK's global Settings singleton before any HTTP handler
+	// (model-roles routes, session creation, etc.) accesses it through the
+	// `settings` proxy. Without this the proxy throws "Settings not initialized"
+	// on the first request.
+	await Settings.init();
 
 	const bridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,

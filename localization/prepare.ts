@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { localizeNavRail, localizeSidebar, localizeNotificationPermissionBanner, localizeNotificationToast, localizeLayout } from "./transforms/components.js";
 import { localizeI18nIndex } from "./transforms/i18n.js";
-import { localizeSettingsView } from "./transforms/views/settings.js";
+import { localizeSettingsHelpers, localizeSettingsView, localizeProvidersSection } from "./transforms/views/settings.js";
 import { localizeTasksView } from "./transforms/views/tasks.js";
 import { localizeInboxView } from "./transforms/views/inbox.js";
 import { localizeRoutinesView } from "./transforms/views/routines.js";
@@ -92,6 +92,8 @@ async function localizeGeneratedFiles(): Promise<void> {
 	);
 	await transformGeneratedFile(path.join("components", "NotificationToast.tsx"), localizeNotificationToast);
 	await transformGeneratedFile(path.join("components", "Layout.tsx"), localizeLayout);
+	await transformGeneratedFile(path.join("components", "settings", "settings-helpers.tsx"), localizeSettingsHelpers);
+	await transformGeneratedFile(path.join("components", "settings", "ProvidersSection.tsx"), localizeProvidersSection);
 	await transformGeneratedFile(path.join("i18n", "index.ts"), localizeI18nIndex);
 	await transformGeneratedFile(path.join("views", "SettingsView.tsx"), localizeSettingsView);
 	await transformGeneratedFile(path.join("views", "SkillsView.tsx"), localizeSkillsView);
