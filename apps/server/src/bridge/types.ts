@@ -197,8 +197,6 @@ export interface AgentMessagePassthrough extends AgentMessageJson {}
  */
 export interface PlanApprovalResponse {
 	approved: boolean;
-	/** Optional rename: `local://*.md`. When absent, uses the suggested final path. */
-	finalPath?: string;
-	/** Optional edited plan body. When present, overwrites `local://PLAN.md` before the rename. */
+	/** Optional edited plan body. When present, overwrites the plan at `planFilePath` before execution. */
 	editedContent?: string;
 }

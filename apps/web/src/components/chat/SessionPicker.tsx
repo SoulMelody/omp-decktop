@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Clock, ClipboardList, MessagesSquare, Plus } from "lucide-react";
+import { ArrowRight, Clock, ClipboardList, FolderPlus, MessagesSquare, Plus } from "lucide-react";
 import type { SessionSummary } from "@omp-deck/protocol";
 
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 /**
  * Rendered as the chat main pane when there is no active session selected.
@@ -20,10 +21,46 @@ export function SessionPicker() {
 	const createSession = useStore((s) => s.createSession);
 	const selectSession = useStore((s) => s.selectSession);
 	const refreshSessions = useStore((s) => s.refreshSessions);
+	const refreshWorkspaces = useStore((s) => s.refreshWorkspaces);
 
 	const [selectedCwd, setSelectedCwd] = useState<string>("");
 	const [busy, setBusy] = useState(false);
+	const [addingWorkspace, setAddingWorkspace] = useState(false);
+	const [newPath, setNewPath] = useState("");
 	const cwdInUse = selectedCwd || defaultCwd;
+
+	async function handleAddWorkspace(): Promise<void> {
+		const trimmed = newPath.trim();
+		if (!trimmed) return;
+		// Merge with existing extra workspaces from the server response.
+		// The /workspaces endpoint returns defaultCwd + extraWorkspaces
+		// concatenated; extra = everything that isn't defaultCwd.
+		const currentExtra = workspaces
+			.filter((w) => w.cwd !== defaultCwd)
+			.map((w) => w.cwd);
+		// Avoid duplicates — case-insensitive on Windows.
+		const already = currentExtra.some(
+			(e) => e.toLowerCase() === trimmed.toLowerCase(),
+		);
+		if (already) {
+			setNewPath("");
+			setAddingWorkspace(false);
+			return;
+		}
+		const merged = [...currentExtra, trimmed];
+		try {
+			await api.patchEnv({ OMP_DECK_WORKSPACES: merged.join(";") });
+			await refreshWorkspaces();
+			// Scroll to 0 keeps the list grounded; otherwise the server
+			// response re-anchors and the user sees a visible shift.
+			window.scrollTo?.({ top: 0 });
+		} catch (err) {
+			console.error("addWorkspace failed", err);
+			alert(`Failed to add workspace: ${String(err)}`);
+		}
+		setNewPath("");
+		setAddingWorkspace(false);
+	}
 
 	const recent = useMemo(() => {
 		const live = Object.values(sessionsById);
@@ -75,23 +112,54 @@ export function SessionPicker() {
 				{/* Primary action — workspace picker + new session */}
 				<div className="rounded-lg border border-line bg-paper-2 p-4 shadow-[0_1px_2px_rgba(26,24,20,0.04)]">
 					<div className="meta mb-1.5">Workspace</div>
-					<select
-						value={selectedCwd}
-						onChange={(e) => {
-							setSelectedCwd(e.target.value);
-							void refreshSessions(e.target.value || undefined);
-						}}
-						className="field h-8 w-full px-2 font-mono text-xs"
-					>
-						<option value="">{`(default) ${defaultCwd}`}</option>
-						{workspaces
-							.filter((w) => w.cwd !== defaultCwd)
-							.map((w) => (
-								<option key={w.cwd} value={w.cwd}>
-									{w.label} · {w.cwd}
-								</option>
-							))}
-					</select>
+					<div className="flex gap-1.5">
+						<select
+							value={selectedCwd}
+							onChange={(e) => {
+								setSelectedCwd(e.target.value);
+								void refreshSessions(e.target.value || undefined);
+							}}
+							className="field h-8 flex-1 px-2 font-mono text-xs"
+						>
+							<option value="">{`(default) ${defaultCwd}`}</option>
+							{workspaces
+								.filter((w) => w.cwd !== defaultCwd)
+								.map((w) => (
+									<option key={w.cwd} value={w.cwd}>
+										{w.label} · {w.cwd}
+									</option>
+								))}
+						</select>
+						<button
+							type="button"
+							title="Add workspace folder"
+							onClick={() => setAddingWorkspace((v) => !v)}
+							className="btn-ghost h-8 w-8 shrink-0 p-0"
+						>
+							<FolderPlus className="h-4 w-4" />
+						</button>
+					</div>
+					{addingWorkspace ? (
+						<div className="mt-2 flex gap-1.5">
+							<input
+								type="text"
+								value={newPath}
+								onChange={(e) => setNewPath(e.target.value)}
+								onKeyDown={(e) => { if (e.key === "Enter") void handleAddWorkspace(); }}
+								placeholder="C:\Users\SoulMelody\Projects\my-app"
+								className="field h-8 flex-1 px-2 font-mono text-xs"
+								autoFocus
+							/>
+							<button
+								type="button"
+								onClick={() => void handleAddWorkspace()}
+								disabled={!newPath.trim()}
+								className="btn-primary h-8 shrink-0 px-3 text-xs"
+							>
+								Add
+							</button>
+						</div>
+					) : null}
 					<div className="mt-2 truncate font-mono text-2xs text-ink-3" title={cwdInUse}>
 						{shortPath(cwdInUse, 80)}
 					</div>

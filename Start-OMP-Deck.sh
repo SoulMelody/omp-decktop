@@ -25,7 +25,7 @@ case "${1:-foreground}" in
       exit 0
     fi
     bun install --frozen-lockfile > "$LOG_DIR/install.log" 2>&1
-    nohup bun run dev > "$LOG_FILE" 2>&1 &
+    nohup bun run dev:zh > "$LOG_FILE" 2>&1 &
     PID=$!
     echo "$PID" > "$PID_FILE"
     echo "omp-deck started (PID $PID). Logs: $LOG_FILE"
@@ -61,16 +61,43 @@ case "${1:-foreground}" in
     fi
     ;;
   foreground|"")
-    # No-argument run = foreground, same shape as `bun run dev`. Ctrl+C
+    # No-argument run = foreground, same shape as `bun run dev:zh`. Ctrl+C
     # cleans up. Skips the install step — assume the developer already
     # ran `bun install`.
-    exec bun run dev
+    #
+    # `bun run --filter` spawns Vite as a grandchild node process. On
+    # Windows, Ctrl+C often fails to propagate to grandchildren, leaving
+    # port 5173 occupied. The trap kills the bun PID first, then hunts
+    # down any leftover vite.js by port as a safety net.
+    _cleanup_foreground() {
+      # 1. Kill the bun launcher and its direct children.
+      if [ -n "${_BUN_PID:-}" ] && kill -0 "$_BUN_PID" 2>/dev/null; then
+        if command -v taskkill >/dev/null 2>&1; then
+          taskkill //F //PID "$_BUN_PID" //T 2>/dev/null || true
+        else
+          kill -TERM -"$_BUN_PID" 2>/dev/null || kill -TERM "$_BUN_PID" 2>/dev/null || true
+        fi
+        sleep 1
+      fi
+      # 2. Belt-and-suspenders: netstat the PID squatting on the Vite port
+      #    and taskkill it. `bun run --filter` spawns Vite as a grandchild
+      #    node process; taskkill //T sometimes doesn't reach that deep.
+      local _vpid
+      _vpid=$(netstat -ano 2>/dev/null | grep ':5173' | grep LISTENING | awk '{print $NF}' | head -1)
+      if [ -n "${_vpid:-}" ] && kill -0 "$_vpid" 2>/dev/null; then
+        command -v taskkill >/dev/null 2>&1 && taskkill //F //PID "$_vpid" //T 2>/dev/null || kill -KILL "$_vpid" 2>/dev/null || true
+      fi
+    }
+    trap _cleanup_foreground INT TERM EXIT
+    bun run dev:zh &
+    _BUN_PID=$!
+    wait $_BUN_PID
     ;;
   *)
     cat <<USAGE
 Usage: $0 [start|stop|status|foreground]
 
-  (no arg)     foreground run, same as 'bun run dev'
+  (no arg)     foreground run, same as 'bun run dev:zh'
   start        background, writes PID + logs to $LOG_DIR/, opens browser
   stop         terminate the background run started via 'start'
   status       check whether a background run is alive

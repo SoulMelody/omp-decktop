@@ -56,9 +56,16 @@ function mapApiFormat(apiFormat: unknown): string | null {
 /**
  * Parse a cc-switch settings_config JSON string. Returns the parsed object
  * or an empty object on failure. The `env` sub-key holds the actual
- * environment variables (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.).
+ * environment variables (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.);
+ * `auth` holds literal API keys; `config` is an INI string with `base_url`
+ * and other model-provider settings.
  */
-function parseSettingsConfig(raw: string | null): { env: Record<string, string>; [k: string]: unknown } {
+function parseSettingsConfig(raw: string | null): {
+	env: Record<string, string>;
+	auth?: Record<string, string>;
+	config?: string;
+	[k: string]: unknown;
+} {
 	if (!raw) return { env: {} };
 	try {
 		const parsed = JSON.parse(raw);
@@ -129,6 +136,8 @@ export function readCcSwitchProviders(dbPath: string): CcSwitchProvider[] {
 				providerType: row.provider_type,
 				websiteUrl: row.website_url,
 				env: settings.env,
+				auth: settings.auth,
+				configIni: settings.config,
 				meta,
 				apiType,
 			};
@@ -163,25 +172,68 @@ function sanitizeDirName(name: string): string {
 }
 
 /**
- * Extract the base URL from cc-switch env vars. cc-switch uses
- * `ANTHROPIC_BASE_URL` regardless of the actual api format.
+ * Extract the base URL from cc-switch settings. cc-switch stores this in
+ * two places depending on provider type:
+ *   1. `settings_config.env.ANTHROPIC_BASE_URL` (or similar env keys)
+ *   2. `settings_config.config` — an INI string with `base_url = "http://..."`
+ * Returns undefined when neither source has a value.
  */
-function extractBaseUrl(env: Record<string, string>): string | undefined {
-	return env.ANTHROPIC_BASE_URL || env.OPENAI_BASE_URL || env.BASE_URL;
+function extractBaseUrl(
+	env: Record<string, string>,
+	configIni: string | undefined,
+): string | undefined {
+	// 1. Check env keys first (some providers use this).
+	const fromEnv = env.ANTHROPIC_BASE_URL || env.OPENAI_BASE_URL || env.BASE_URL;
+	if (fromEnv) return fromEnv;
+	// 2. Parse the INI config string for `base_url = "..."`.
+	if (configIni) {
+		const match = configIni.match(/^\s*base_url\s*=\s*"([^"]*)"/m);
+		if (match) return match[1] || undefined;
+	}
+	return undefined;
 }
 
-function extractApiKey(env: Record<string, string>): string | undefined {
-	return env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || env.API_KEY;
+function extractApiKey(
+	env: Record<string, string>,
+	auth: Record<string, string> | undefined,
+): string | undefined {
+	// 1. Check env keys first.
+	const fromEnv =
+		env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || env.API_KEY;
+	if (fromEnv) return fromEnv;
+	// 2. Check auth sub-object (cc-switch stores literal keys here, e.g.
+	//    `auth.OPENAI_API_KEY`).
+	if (auth) {
+		const fromAuth =
+			auth.ANTHROPIC_AUTH_TOKEN || auth.ANTHROPIC_API_KEY || auth.OPENAI_API_KEY || auth.API_KEY;
+		if (fromAuth) return fromAuth;
+	}
+	return undefined;
 }
 
-function extractModel(env: Record<string, string>, meta: Record<string, unknown>): string | undefined {
-	// cc-switch sometimes stores the model in env, sometimes in meta.model
+function extractModel(
+	env: Record<string, string>,
+	meta: Record<string, unknown>,
+	configIni: string | undefined,
+): string | undefined {
+	// 1. Check env keys first.
 	const envModel =
 		env.ANTHROPIC_MODEL || env.ANTHROPIC_DEFAULT_SONNET_MODEL || env.OPENAI_MODEL || env.MODEL;
-	const raw = envModel || (typeof meta.model === "string" ? meta.model : undefined);
-	if (!raw) return undefined;
-	// Strip cc-switch display annotations like "[1m]" or "[128k]"
-	return raw.replace(/\[.*?\]$/, "").trim() || undefined;
+	if (envModel) return stripAnnotations(envModel);
+	// 2. Check meta.model.
+	if (typeof meta.model === "string") return stripAnnotations(meta.model);
+	// 3. Parse the INI config string for `model = "..."`.
+	if (configIni) {
+		const match = configIni.match(/^\s*model\s*=\s*"([^"]*)"/m);
+		if (match?.[1]) return stripAnnotations(match[1]);
+	}
+	return undefined;
+}
+
+/** Strip cc-switch display annotations like "[1m]" or "[128k]". */
+function stripAnnotations(raw: string): string | undefined {
+	const cleaned = raw.replace(/\[.*?\]$/, "").trim();
+	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /**
@@ -257,9 +309,9 @@ export function writeCcSwitchExtension(provider: CcSwitchProvider): string {
 		providerId: `ccswitch-${sanitizeDirName(provider.id)}`,
 		displayName: provider.name,
 		apiType: provider.apiType ?? "openai-completions",
-		baseUrl: extractBaseUrl(provider.env),
-		apiKey: extractApiKey(provider.env),
-		model: extractModel(provider.env, provider.meta),
+		baseUrl: extractBaseUrl(provider.env, provider.configIni),
+		apiKey: extractApiKey(provider.env, provider.auth),
+		model: extractModel(provider.env, provider.meta, provider.configIni),
 	});
 
 	const indexPath = path.join(extDir, "index.ts");

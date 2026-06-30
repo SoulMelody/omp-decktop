@@ -34,6 +34,7 @@ import { buildOrientationRouter } from "./routes-orientation.ts";
 import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildCcSwitchRouter } from "./routes-ccswitch.ts";
+import { mcpApp } from "./routes-mcp.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
@@ -252,6 +253,7 @@ export function buildRouter(
 	app.route("/auth/oauth", buildAuthOAuthRouter());
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/ccswitch", buildCcSwitchRouter());
+	app.route("/mcp", mcpApp);
 
 	return app;
 }

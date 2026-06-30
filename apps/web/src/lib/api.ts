@@ -6,6 +6,11 @@ import type {
 	ListSessionsResponse,
 	ListSlashCommandsResponse,
 	ListWorkspacesResponse,
+	McpCreateRequest,
+	McpListResponse,
+	McpServerConfigWire,
+	McpTestResponse,
+	McpUpdateRequest,
 	ModelRef,
 } from "@omp-deck/protocol";
 
@@ -83,5 +88,29 @@ export const api = {
 	completeFilePath(cwd: string, q: string, limit = 20): Promise<ListFilePathsResponse> {
 		const params = new URLSearchParams({ cwd, q, limit: String(limit) });
 		return request<ListFilePathsResponse>(`/fs/complete?${params.toString()}`);
+	},
+	patchEnv(updates: Record<string, string | null>): Promise<{ appliedHot?: string[] }> {
+		return request(`/settings/env`, {
+			method: "PATCH",
+			body: JSON.stringify({ updates }),
+		});
+	},
+	listMcpServers(): Promise<McpListResponse> {
+		return request<McpListResponse>("/mcp");
+	},
+	addMcpServer(body: McpCreateRequest): Promise<{ ok: true }> {
+		return request("/mcp", { method: "POST", body: JSON.stringify(body) });
+	},
+	updateMcpServer(name: string, body: McpUpdateRequest): Promise<{ ok: true }> {
+		return request(`/mcp/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify(body) });
+	},
+	deleteMcpServer(name: string): Promise<{ ok: true }> {
+		return request(`/mcp/${encodeURIComponent(name)}`, { method: "DELETE" });
+	},
+	toggleMcpServer(name: string): Promise<{ ok: true; disabled: boolean }> {
+		return request(`/mcp/${encodeURIComponent(name)}/toggle`, { method: "POST" });
+	},
+	testMcpConnection(name: string): Promise<McpTestResponse> {
+		return request<McpTestResponse>(`/mcp/${encodeURIComponent(name)}/test`, { method: "POST" });
 	},
 };

@@ -15,12 +15,12 @@ import { cn } from "@/lib/utils";
  *
  * Three actions:
  *   - Reject: `respondToPlanApproval({ approved: false })`. Server exits
- *     plan mode and surfaces a clear rejection to the agent. No rename.
- *   - Approve: `respondToPlanApproval({ approved: true, finalPath? })`.
- *     Server renames `local://PLAN.md` to the title-derived path and queues
- *     the synthetic execute prompt as a follow-up turn.
+ *     plan mode and surfaces a clear rejection to the agent.
+ *   - Approve: `respondToPlanApproval({ approved: true })`. Server exits
+ *     plan mode and queues the synthetic execute prompt as a follow-up turn.
+ *     The plan file is never renamed (SDK 16) — it stays at `local://PLAN.md`.
  *   - Edit & approve: includes `editedContent` so the bridge writes the
- *     replacement to PLAN.md before the rename.
+ *     replacement back to the plan path before execution.
  *
  * Optimistic-clear is handled in `store.respondToPlanApproval`; the
  * server's `plan_proposal_resolved` (or `plan_mode_changed{enabled:false}`)
@@ -31,28 +31,20 @@ export function PlanApproval({ session }: { session: SessionUi }) {
 	const approval = session.pendingPlanApproval;
 	const respond = useStore((s) => s.respondToPlanApproval);
 
-	const [title, setTitle] = useState<string>(approval?.suggestedTitle ?? "");
 	const [editing, setEditing] = useState(false);
 	const [editedContent, setEditedContent] = useState<string>(approval?.planContent ?? "");
 
 	// Reset local state whenever a new proposal lands (proposalId is the key).
 	useEffect(() => {
 		if (!approval) return;
-		setTitle(approval.suggestedTitle);
 		setEditedContent(approval.planContent);
 		setEditing(false);
-	}, [approval?.proposalId, approval?.suggestedTitle, approval?.planContent]);
+	}, [approval?.proposalId, approval?.planContent]);
 
 	// Cheap guard so the early-return below narrows for the closures.
 	if (!approval) return null;
 	const a = approval;
 	const sessionId = session.sessionId;
-
-	const trimmedTitle = title.trim();
-	const titleChanged = trimmedTitle.length > 0 && trimmedTitle !== a.suggestedTitle;
-	const finalPath = titleChanged
-		? `local://${trimmedTitle.replace(/\s+/g, "-")}.md`
-		: a.suggestedFinalPath;
 
 	function reject(): void {
 		respond({ sessionId, proposalId: a.proposalId, approved: false });
@@ -63,7 +55,6 @@ export function PlanApproval({ session }: { session: SessionUi }) {
 			sessionId,
 			proposalId: a.proposalId,
 			approved: true,
-			...(titleChanged ? { finalPath } : {}),
 			...(opts.withEdits && editedContent !== a.planContent ? { editedContent } : {}),
 		});
 	}
@@ -80,25 +71,8 @@ export function PlanApproval({ session }: { session: SessionUi }) {
 				<span className="rounded border border-accent-plan/40 bg-accent-plan/10 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-meta text-accent-plan">
 					Plan ready
 				</span>
-				<span className="truncate font-mono text-2xs text-ink-3">→ {finalPath}</span>
+				<span className="truncate font-mono text-2xs text-ink-3">{a.suggestedTitle}</span>
 			</header>
-
-			<label className="mb-3 block">
-				<span className="meta mb-1 block">Title</span>
-				<input
-					type="text"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					placeholder={a.suggestedTitle}
-					className={cn(
-						"w-full rounded border border-line bg-paper px-2 py-1 text-[13px] text-ink",
-						"placeholder:text-ink-4 focus:border-accent-plan/60 focus:outline-none",
-					)}
-				/>
-				<span className="meta mt-1 block text-ink-4">
-					Letters, numbers, hyphens, underscores. Spaces become hyphens.
-				</span>
-			</label>
 
 			{editing ? (
 				<textarea

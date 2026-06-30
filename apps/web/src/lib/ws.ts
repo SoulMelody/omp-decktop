@@ -20,7 +20,17 @@ export class WsClient {
 
 	constructor(url?: string) {
 		const proto = location.protocol === "https:" ? "wss" : "ws";
-		this.url = url ?? `${proto}://${location.host}/ws`;
+		if (url) {
+			this.url = url;
+		} else if (import.meta.env.DEV) {
+			// Dev mode: bypass Vite's WS proxy. On Windows the proxy
+			// drops WebSocket upgrades intermittently; connecting to
+			// the server port directly is reliable.
+			const port = import.meta.env.OMP_DECK_PORT ?? "8787";
+			this.url = `${proto}://${location.hostname}:${port}/ws`;
+		} else {
+			this.url = `${proto}://${location.host}/ws`;
+		}
 	}
 
 	connect(): void {

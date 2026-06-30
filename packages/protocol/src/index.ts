@@ -724,8 +724,6 @@ export interface PendingPlanApprovalWire {
 	planContent: string;
 	/** Title derived via SDK `resolvePlanTitle` — pre-fills the title input. */
 	suggestedTitle: string;
-	/** Final `local://` path the plan will move to on approve (title-stem.md). */
-	suggestedFinalPath: string;
 }
 
 /** Snapshot delivered when a client subscribes to an existing session. */
@@ -865,18 +863,18 @@ export type ClientFrame =
 	 */
 	| { type: "set_plan_mode"; sessionId: string; enabled: boolean }
 	/**
-	 * Reply to a `plan_proposed` frame. `approved=true` triggers rename +
-	 * synthetic `planModeApprovedPrompt` injection; `approved=false`
-	 * silently exits plan mode. `editedContent` overwrites `local://PLAN.md`
-	 * before the rename; `finalPath` overrides the title-derived destination
-	 * (must be `local://*.md`).
+	 * Reply to a `plan_proposed` frame. `approved=true` exits plan mode and
+	 * injects the synthetic `planModeApprovedPrompt` as a follow-up turn so
+	 * the next turn executes the plan; `approved=false` silently exits plan
+	 * mode. `editedContent` overwrites the plan at `planFilePath` before
+	 * execution. (SDK 16 never renames the plan file — it stays at
+	 * `local://<slug>-plan.md` for the session.)
 	 */
 	| {
 			type: "plan_response";
 			sessionId: string;
 			proposalId: string;
 			approved: boolean;
-			finalPath?: string;
 			editedContent?: string;
 	  };
 
@@ -1029,7 +1027,6 @@ export type ServerFrame =
 			planFilePath: string;
 			planContent: string;
 			suggestedTitle: string;
-			suggestedFinalPath: string;
 	  }
 	/**
 	 * A previously-broadcast `plan_proposed` has been resolved. Second-tab
@@ -1741,6 +1738,10 @@ export interface CcSwitchProvider {
 	websiteUrl: string | null;
 	/** Parsed env vars from settings_config.env (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.) */
 	env: Record<string, string>;
+	/** Parsed auth vars from settings_config.auth (literal API keys, e.g. OPENAI_API_KEY) */
+	auth?: Record<string, string>;
+	/** Raw INI string from settings_config.config (contains base_url, model, etc.) */
+	configIni?: string;
 	/** Parsed meta JSON (contains apiFormat, etc.) */
 	meta: Record<string, unknown>;
 	/** Mapped SDK api type: openai-completions | anthropic-messages | openai-responses */
@@ -1782,4 +1783,57 @@ export interface CcSwitchImportResponse {
 	okCount: number;
 	/** Total providers that failed. */
 	errorCount: number;
+}
+
+// ─── MCP Server Management ──────────────────────────────────────────────────
+
+/** Wire-compatible MCP server config (subset of SDK's MCPServerConfig). */
+export interface McpServerConfigWire {
+	type: "stdio" | "http" | "sse";
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+	cwd?: string;
+	url?: string;
+	headers?: Record<string, string>;
+	timeout?: number;
+	enabled?: boolean;
+}
+
+/** One MCP server entry as returned by the list endpoint. */
+export interface McpServerEntry {
+	name: string;
+	config: McpServerConfigWire;
+	disabled: boolean;
+	/** Which file provides this server config. */
+	source: string;
+}
+
+/** Response for GET /api/mcp */
+export interface McpListResponse {
+	servers: McpServerEntry[];
+	/** Absolute path to the user-level mcp.json on disk. */
+	userConfigPath: string;
+}
+
+/** Response for POST /api/mcp/:name/test */
+export interface McpTestResponse {
+	ok: boolean;
+	serverName: string;
+	/** Tool names discovered during the handshake. */
+	tools?: string[];
+	error?: string;
+}
+
+/** Request body for POST /api/mcp */
+export interface McpCreateRequest {
+	name: string;
+	config: McpServerConfigWire;
+}
+
+/** Request body for PUT /api/mcp/:name */
+export interface McpUpdateRequest {
+	/** New server name (omit to keep current). */
+	name?: string;
+	config: McpServerConfigWire;
 }

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, shortPath, truncate, formatTokens, formatCost } from "@/lib/utils";
 import type { SessionUi, UserMsg, AssistantMsg } from "@/lib/types";
+import { api } from "@/lib/api";
 
 export function Sidebar() {
 	const workspaces = useStore((s) => s.workspaces);
@@ -14,6 +15,7 @@ export function Sidebar() {
 	const refreshWorkspaces = useStore((s) => s.refreshWorkspaces);
 	const createSession = useStore((s) => s.createSession);
 	const selectSession = useStore((s) => s.selectSession);
+	const disposeSession = useStore((s) => s.disposeSession);
 
 	const [selectedCwd, setSelectedCwd] = useState<string | "">("");
 	const [creating, setCreating] = useState(false);
@@ -51,6 +53,16 @@ export function Sidebar() {
 
 	const liveSessions = Object.values(sessionsById);
 	const persisted = filtered.filter((s) => !sessionsById[s.id]);
+
+	async function handleDelete(id: string): Promise<void> {
+		if (!confirm("Delete this session?")) return;
+		try {
+			await disposeSession(id);
+			void refreshSessions(selectedCwd || undefined);
+		} catch (err) {
+			console.error("delete session failed", err);
+		}
+	}
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -124,6 +136,7 @@ export function Sidebar() {
 							status={s.status}
 							planMode={s.planMode?.enabled === true}
 							onClick={() => selectSession(s.sessionId)}
+							onDelete={() => void handleDelete(s.sessionId)}
 						/>
 					);
 				})}
@@ -139,6 +152,7 @@ export function Sidebar() {
 						subtitle={`${s.messageCount} msgs · ${shortPath(s.cwd, 20)}`}
 						meta={formatRelative(s.updatedAt || s.createdAt)}
 						onClick={() => void handleResume(s.path)}
+						onDelete={() => void handleDelete(s.id)}
 					/>
 				))}
 
@@ -254,6 +268,7 @@ function SessionRow({
 	status,
 	planMode,
 	onClick,
+	onDelete,
 }: {
 	title: string;
 	subtitle?: string;
@@ -263,6 +278,7 @@ function SessionRow({
 	status?: string;
 	planMode?: boolean;
 	onClick: () => void;
+	onDelete?: () => void;
 }) {
 	return (
 		<button
@@ -318,6 +334,20 @@ function SessionRow({
 			{/* Meta (turns · tokens · cost / relative time) */}
 			{meta ? (
 				<div className="truncate pl-3 font-mono text-2xs text-ink-4">{meta}</div>
+			) : null}
+
+			{/* Delete button — visible on hover */}
+			{onDelete ? (
+				<span
+					role="button"
+					tabIndex={0}
+					title="Delete session"
+					onClick={(e) => { e.stopPropagation(); onDelete(); }}
+					onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onDelete(); } }}
+					className="absolute right-1 top-1.5 hidden h-5 w-5 items-center justify-center rounded text-ink-4 hover:bg-danger/10 hover:text-danger group-hover:flex"
+				>
+					<Trash2 className="h-3 w-3" />
+				</span>
 			) : null}
 		</button>
 	);

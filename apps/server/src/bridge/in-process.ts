@@ -1005,7 +1005,9 @@ export class InProcessSessionHandle implements SessionHandle {
 		for (const entry of survivors) {
 			const opts: Record<string, unknown> = { streamingBehavior: entry.behavior };
 			if (entry.images && entry.images.length > 0) opts.images = entry.images;
-			promises.push(this.session.prompt(entry.text, opts as any));
+			// SDK 16's `prompt()` resolves to `Promise<boolean>` (whether a turn
+			// was queued vs. streamed); we only need to await completion, so drop it.
+			promises.push(this.session.prompt(entry.text, opts as any).then(() => undefined));
 		}
 		this.shadowQueue = survivors;
 		try {
@@ -1136,6 +1138,15 @@ export class InProcessSessionHandle implements SessionHandle {
 			await this.session.dispose();
 		} catch (err) {
 			log.warn(`session.dispose threw`, err);
+		}
+		// Drop the session file from disk so it doesn't reappear after refresh.
+		const file = this.sessionFile;
+		if (file) {
+			try {
+				await this.sessionManager.dropSession(file);
+			} catch (err) {
+				log.warn(`dropSession threw`, err);
+			}
 		}
 		this.onDisposeCallback();
 	}

@@ -19,18 +19,17 @@
  *
  *   3. `#handlePlanResolve`'s `apply` callback:
  *      - validates plan-mode is still active
- *      - reads the plan file via `local://` resolver
- *      - derives a title via `resolvePlanTitle` (handles issue #1179
- *        empty-`extra.title` corner case)
+ *      - locates + reads the plan file via the SDK's `resolveApprovedPlan`
+ *        (also resolves the title, handling issue #1179 empty-`extra.title`)
  *      - broadcasts `plan_proposed` to the deck UI
  *      - **blocks** on a Promise the deck UI settles via
  *        `plan_response` → `respond(proposalId, response)`
  *
- *   4. On approve: write edited content (if any), rename PLAN.md to
- *      the title-derived final path, exit plan mode (restoring the
- *      previous tool set + clearing handler + clearing SDK state),
- *      and queue the SDK's `planModeApprovedPrompt` as a follow-up
- *      so the next turn executes the plan with full tools.
+ *   4. On approve: write edited content (if any) back to the (unchanged)
+ *      plan path, exit plan mode (restoring the previous tool set + clearing
+ *      handler + clearing SDK state), and queue the SDK's
+ *      `planModeApprovedPrompt` as a follow-up so the next turn executes the
+ *      plan with full tools. The plan file is never renamed (SDK 16).
  *
  *   5. On reject: exit plan mode and surface a clear rejection
  *      message to the agent.
@@ -48,11 +47,7 @@ import * as fs from "node:fs/promises";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { AgentToolResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import {
-	type PlanApprovalDetails,
-	renameApprovedPlanFile,
-	resolvePlanTitle,
-} from "@oh-my-pi/pi-coding-agent/plan-mode/approved-plan";
+import { type PlanApprovalDetails, resolveApprovedPlan } from "@oh-my-pi/pi-coding-agent/plan-mode/approved-plan";
 import { type ResolveToolDetails, runResolveInvocation } from "@oh-my-pi/pi-coding-agent/tools/resolve";
 import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
 import type {
@@ -84,8 +79,13 @@ const PLAN_WORKFLOW = "parallel" as const;
  * `@oh-my-pi/pi-coding-agent/src/prompts/system/plan-mode-approved.md`
  * with the deck's fixed branches baked in:
  *   - `contextPreserved: true` (deck never compacts at the plan boundary;
- *     deferred to v1.1 — see design doc §"open questions" #2)
+ *     deferred to v1.1 — see design doc §"open questions" #2), so the
+ *     `{{#if contextPreserved}}` branch is baked in as always-on
  *   - `tools` includes `todo_write` (deck's session tool set always has it)
+ *
+ * Mirrors the upstream `{{planFilePath}}`/`{{planContent}}`/`{{contextPreserved}}`
+ * variables. SDK 16 never renames the plan file, so `planFilePath` is the same
+ * `local://PLAN.md` the agent wrote — no `finalPlanFilePath`.
  *
  * Inlined because the SDK's `exports` map doesn't expose `.md` assets, and
  * we want a stable contract that's visible alongside the lifecycle code
@@ -97,15 +97,16 @@ const PLAN_APPROVED_PROMPT_TEMPLATE = `<critical>
 Plan approved. You MUST execute it now.
 </critical>
 
-Finalized plan artifact: \`{{finalPlanFilePath}}\`
-Context preserved. Use conversation history when useful; the finalized plan is the source of truth if it conflicts with earlier exploration.
+Context preserved. Use conversation history when useful; this plan is the source of truth if it conflicts with earlier exploration.
+
+The plan path is \`{{planFilePath}}\` — for subagent handoff only. You already have the plan; do not read it.
 
 ## Plan
 
 {{planContent}}
 
 <instruction>
-You MUST execute this plan step by step from \`{{finalPlanFilePath}}\`. You have full tool access.
+You MUST execute this plan step by step. You have full tool access.
 You MUST verify each step before proceeding to the next.
 Before execution, initialize todo tracking with \`todo_write\`.
 After each completed step, immediately update \`todo_write\`.
@@ -129,7 +130,6 @@ interface PendingApproval {
 	planFilePath: string;
 	planContent: string;
 	suggestedTitle: string;
-	suggestedFinalPath: string;
 	resolve: (resp: PlanApprovalResponse) => void;
 	reject: (err: Error) => void;
 }
@@ -151,7 +151,7 @@ export interface PlanModeSessionSurface {
 	prompt(
 		text: string,
 		options?: { synthetic?: boolean; streamingBehavior?: "steer" | "followUp" },
-	): Promise<void>;
+	): Promise<boolean>;
 }
 
 export interface PlanModeBridgeArgs {
@@ -207,7 +207,6 @@ export class PlanModeBridge {
 			planFilePath: p.planFilePath,
 			planContent: p.planContent,
 			suggestedTitle: p.suggestedTitle,
-			suggestedFinalPath: p.suggestedFinalPath,
 		};
 	}
 
@@ -232,7 +231,6 @@ export class PlanModeBridge {
 				planFilePath: p.planFilePath,
 				planContent: p.planContent,
 				suggestedTitle: p.suggestedTitle,
-				suggestedFinalPath: p.suggestedFinalPath,
 			});
 		}
 		return out;
@@ -283,8 +281,8 @@ export class PlanModeBridge {
 	 * the resolve tool's failure result.
 	 *
 	 * `reason` differentiates user-cancel (Shift+Tab off, Reject click) from
-	 * server-side cleanup (session disposed, approve path that already did
-	 * the rename + synthetic prompt).
+	 * server-side cleanup (session disposed, approve path that already queued
+	 * the synthetic prompt).
 	 */
 	async exit(
 		reason: "user_cancelled" | "session_disposed" | "approved" | "rejected" = "user_cancelled",
@@ -392,19 +390,15 @@ export class PlanModeBridge {
 					throw new ToolError("Plan mode is not active.");
 				}
 
-				const planContent = await this.#readPlanFile(this.planFilePath);
-				if (planContent === null) {
-					throw new ToolError(
-						`Plan file not found at ${this.planFilePath}. Write the finalized plan before requesting approval.`,
-					);
-				}
-
-				const normalized = resolvePlanTitle({
+				// Locate + read the plan file the agent wrote and derive its title
+				// via the SDK's own resolver (handles the issue #1179 empty-`extra.title`
+				// corner case + slug fallbacks). SDK 16 never renames the plan file.
+				const resolved = await resolveApprovedPlan({
 					suppliedTitle: extra?.title,
-					planContent,
-					planFilePath: this.planFilePath,
+					statePlanFilePath: this.planFilePath,
+					readPlan: (url) => this.#readPlanFile(url),
 				});
-				const suggestedFinalPath = `local://${normalized.fileName}`;
+				const { planFilePath: resolvedPath, planContent, title } = resolved;
 				const proposalId = this.#allocateProposalId();
 
 				// Block on user approval. Stash the proposal so reconnects can
@@ -412,10 +406,9 @@ export class PlanModeBridge {
 				const userResponse = await new Promise<PlanApprovalResponse>((resolve, reject) => {
 					this.pendingApproval = {
 						proposalId,
-						planFilePath: this.planFilePath,
+						planFilePath: resolvedPath,
 						planContent,
-						suggestedTitle: normalized.title,
-						suggestedFinalPath,
+						suggestedTitle: title,
 						resolve,
 						reject,
 					};
@@ -423,17 +416,14 @@ export class PlanModeBridge {
 						type: "plan_proposed",
 						sessionId: this.sessionId,
 						proposalId,
-						planFilePath: this.planFilePath,
+						planFilePath: resolvedPath,
 						planContent,
-						suggestedTitle: normalized.title,
-						suggestedFinalPath,
+						suggestedTitle: title,
 					});
 				});
 
 				// Clear pending — anything after this point is post-decision.
 				this.pendingApproval = undefined;
-
-				const planFilePathAtApproval = this.planFilePath;
 
 				if (!userResponse.approved) {
 					this.#broadcast({
@@ -451,31 +441,21 @@ export class PlanModeBridge {
 							},
 						],
 						details: {
-							planFilePath: planFilePathAtApproval,
-							finalPlanFilePath: suggestedFinalPath,
-							title: normalized.title,
+							planFilePath: resolvedPath,
+							title,
 							planExists: true,
 						} satisfies PlanApprovalDetails,
 					};
 				}
 
-				// Approve path: optionally write edited content, rename
-				// PLAN.md → final, exit plan mode, queue the synthetic
-				// approved-prompt for the next turn.
+				// Approve path: optionally write edited content back to the (unchanged)
+				// plan path, exit plan mode, and queue the synthetic approved-prompt as
+				// a follow-up so the next turn executes the plan with full tools.
 				let finalContent = planContent;
 				if (typeof userResponse.editedContent === "string") {
-					await this.#writePlanFile(planFilePathAtApproval, userResponse.editedContent);
+					await this.#writePlanFile(resolvedPath, userResponse.editedContent);
 					finalContent = userResponse.editedContent;
 				}
-
-				const finalPlanFilePath = sanitizeFinalPath(userResponse.finalPath) ?? suggestedFinalPath;
-
-				await renameApprovedPlanFile({
-					planFilePath: planFilePathAtApproval,
-					finalPlanFilePath,
-					getArtifactsDir: this.getArtifactsDir,
-					getSessionId: this.getSessionId,
-				});
 
 				this.#broadcast({
 					type: "plan_proposal_resolved",
@@ -489,7 +469,7 @@ export class PlanModeBridge {
 				this.session.markPlanReferenceSent();
 				const approvedPrompt = renderApprovedPrompt({
 					planContent: finalContent,
-					finalPlanFilePath,
+					planFilePath: resolvedPath,
 				});
 
 				// Fire-and-forget: the resolve tool is still streaming at
@@ -510,13 +490,12 @@ export class PlanModeBridge {
 					content: [
 						{
 							type: "text" as const,
-							text: `Plan approved. Executing from ${finalPlanFilePath}.`,
+							text: `Plan approved. Executing from ${resolvedPath}.`,
 						},
 					],
 					details: {
-						planFilePath: planFilePathAtApproval,
-						finalPlanFilePath,
-						title: stripMdExtension(extractFileName(finalPlanFilePath)),
+						planFilePath: resolvedPath,
+						title,
 						planExists: true,
 					} satisfies PlanApprovalDetails,
 				};
@@ -552,42 +531,9 @@ export class PlanModeBridge {
 	}
 }
 
-function renderApprovedPrompt(args: { planContent: string; finalPlanFilePath: string }): string {
-	return PLAN_APPROVED_PROMPT_TEMPLATE.replaceAll(
-		"{{planContent}}",
-		args.planContent,
-	).replaceAll("{{finalPlanFilePath}}", args.finalPlanFilePath);
-}
-
-/**
- * Validate a client-supplied override of the final plan path. Returns
- * `undefined` when the input is missing or shaped wrong; the caller falls
- * back to the SDK-suggested path. We deliberately don't throw — a malformed
- * `finalPath` shouldn't fail the whole approval; falling back to the
- * suggested path is the user-friendly default.
- */
-function sanitizeFinalPath(input: string | undefined): string | undefined {
-	if (!input) return undefined;
-	const trimmed = input.trim();
-	if (!trimmed.startsWith("local://")) return undefined;
-	// Strip the scheme and reject anything that has path separators or `..`
-	// anywhere — must be a single safe filename, NOT a nested path or
-	// traversal attempt. (Stripping then taking the basename would silently
-	// "sanitize" `local://../escape.md` into `escape.md`; reject instead.)
-	const remainder = trimmed.replace(/^local:\/+/, "");
-	if (remainder.includes("/") || remainder.includes("\\")) return undefined;
-	if (remainder.includes("..")) return undefined;
-	if (!remainder.endsWith(".md")) return undefined;
-	const stem = remainder.slice(0, -".md".length);
-	if (stem.length === 0) return undefined;
-	if (!/^[A-Za-z0-9_-]+$/.test(stem)) return undefined;
-	return `local://${remainder}`;
-}
-
-function extractFileName(localUrl: string): string {
-	return localUrl.replace(/^local:\/+/, "").split(/[\\/]/).pop() ?? "";
-}
-
-function stripMdExtension(fileName: string): string {
-	return fileName.replace(/\.md$/i, "");
+function renderApprovedPrompt(args: { planContent: string; planFilePath: string }): string {
+	return PLAN_APPROVED_PROMPT_TEMPLATE.replaceAll("{{planContent}}", args.planContent).replaceAll(
+		"{{planFilePath}}",
+		args.planFilePath,
+	);
 }

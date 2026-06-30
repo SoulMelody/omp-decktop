@@ -310,7 +310,6 @@ interface StoreState {
 		sessionId: string;
 		proposalId: string;
 		approved: boolean;
-		finalPath?: string;
 		editedContent?: string;
 	}): void;
 	/** Mark a notification as delivered to the OS so the renderer only fires once. */
@@ -581,7 +580,7 @@ export const useStore = create<StoreState>()(
 			get().ws?.send({ type: "set_plan_mode", sessionId: id, enabled });
 		},
 
-		respondToPlanApproval({ sessionId, proposalId, approved, finalPath, editedContent }) {
+		respondToPlanApproval({ sessionId, proposalId, approved, editedContent }) {
 			// Optimistically clear the local approval card so the UI hides
 			// immediately. Server emits `plan_proposal_resolved`; if the
 			// proposalId is stale (sibling tab won the race), the bridge's
@@ -603,7 +602,6 @@ export const useStore = create<StoreState>()(
 				sessionId,
 				proposalId,
 				approved,
-				...(finalPath !== undefined ? { finalPath } : {}),
 				...(editedContent !== undefined ? { editedContent } : {}),
 			});
 		},
@@ -737,7 +735,6 @@ function handleFrame(
 					planFilePath: frame.planFilePath,
 					planContent: frame.planContent,
 					suggestedTitle: frame.suggestedTitle,
-					suggestedFinalPath: frame.suggestedFinalPath,
 				};
 				return {
 					sessionsById: {
