@@ -24,7 +24,15 @@ import {
 	writeManagedEnvUpdates,
 } from "./env-store.ts";
 import { setLogLevel } from "./log.ts";
+import { settings as ompSettings } from "@oh-my-pi/pi-coding-agent";
+import { getAgentDir } from "@oh-my-pi/pi-utils";
 import type { AgentBridge } from "./bridge/types.ts";
+import type {
+	ModelRoleEntry,
+	ModelRolesResponse,
+	ModelInfo,
+	UpdateModelRolesRequest,
+} from "@omp-deck/protocol";
 
 export function buildSettingsRouter(
 	bridge: AgentBridge,
@@ -84,6 +92,107 @@ export function buildSettingsRouter(
 		const response = buildEnvResponse() as PatchEnvSettingsResponse;
 		response.appliedHot = appliedHot;
 		return c.json(response);
+	});
+
+	// ─── Model Roles ──────────────────────────────────────────────────────────
+
+	const ROLE_CATALOG: readonly ModelRoleEntry[] = [
+		{ key: "default", label: "Default", description: "Fallback model for unspecified roles." },
+		{ key: "fast", label: "Fast", description: "Low-latency tasks and quick responses." },
+		{ key: "thinking", label: "Thinking", description: "Hard reasoning and deeper analysis." },
+		{ key: "vision", label: "Vision", description: "Image-capable tasks." },
+		{ key: "architect", label: "Architect", description: "Planning, architecture, and design work." },
+		{ key: "designer", label: "Designer", description: "UI and product design work." },
+		{ key: "commit", label: "Commit", description: "Commit messages and git summarization." },
+		{ key: "tiny", label: "Tiny", description: "Cheap utility tasks and small transformations." },
+		{ key: "subtask", label: "Subtask", description: "Subagent/subtask execution." },
+		{ key: "advisor", label: "Advisor", description: "Guidance, review, and advisory flows." },
+	] as const;
+
+	const VALID_ROLES = new Set<string>(ROLE_CATALOG.map((r) => r.key));
+
+	// GET /api/settings/model-roles
+	app.get("/settings/model-roles", async (c) => {
+		const currentRoles = ompSettings.getModelRoles();
+		const configPath = path.join(getAgentDir(), "config.yml");
+
+		const roles: ModelRoleEntry[] = ROLE_CATALOG.map((r) => ({
+			...r,
+			modelId: currentRoles[r.key] || undefined,
+		}));
+
+		let models: ModelInfo[] = [];
+		try {
+			models = await bridge.listModels();
+		} catch {
+			// models stay empty; UI should degrade gracefully
+		}
+
+		return c.json({
+			roles,
+			models,
+			configPath,
+		} satisfies ModelRolesResponse);
+	});
+
+	// PUT /api/settings/model-roles — persists via set("modelRoles", ...)
+	app.put("/settings/model-roles", async (c) => {
+		let body: UpdateModelRolesRequest;
+		try {
+			body = (await c.req.json()) as UpdateModelRolesRequest;
+		} catch {
+			return c.json({ error: "invalid json body" }, 400);
+		}
+
+		const roles = body.roles ?? {};
+		for (const key of Object.keys(roles)) {
+			if (!VALID_ROLES.has(key)) {
+				return c.json({ error: `unknown role: ${key}` }, 400);
+			}
+		}
+
+		// Merge: non-null values set, null/empty values delete.
+		const current = ompSettings.getModelRoles();
+		const next: Record<string, string> = {};
+		for (const [k, v] of Object.entries(current)) {
+			if (v) next[k] = v;
+		}
+		for (const [key, value] of Object.entries(roles)) {
+			if (value && typeof value === "string" && value.trim()) {
+				next[key] = value.trim();
+			} else {
+				delete next[key];
+			}
+		}
+		// Use set() (persisted), not override() (runtime-only).
+		ompSettings.set("modelRoles", next);
+		await ompSettings.flush();
+
+		return c.json({ ok: true });
+	});
+
+	// DELETE /api/settings/model-roles/:role
+	app.delete("/settings/model-roles/:role", async (c) => {
+		const role = c.req.param("role");
+		if (!VALID_ROLES.has(role)) return c.json({ error: `unknown role: ${role}` }, 400);
+
+		const current = ompSettings.getModelRoles();
+		const next: Record<string, string> = {};
+		for (const [k, v] of Object.entries(current)) {
+			if (v) next[k] = v;
+		}
+		delete next[role];
+		ompSettings.set("modelRoles", next);
+		await ompSettings.flush();
+
+		return c.json({ ok: true });
+	});
+
+	// DELETE /api/settings/model-roles — reset all
+	app.delete("/settings/model-roles", async (c) => {
+		ompSettings.set("modelRoles", {});
+		await ompSettings.flush();
+		return c.json({ ok: true });
 	});
 
 	app.post("/server/restart", (c) => {
