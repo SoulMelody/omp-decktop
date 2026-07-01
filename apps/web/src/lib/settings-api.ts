@@ -11,6 +11,9 @@ import type {
 	LspConfigResponse,
 	ProjectLspConfigResponse,
 	UpdateModelRolesRequest,
+	DapConfigResponse,
+	ProjectDapConfigResponse,
+	UpdateDapConfigRequest,
 } from "@omp-deck/protocol";
 
 const BASE = "/api";
@@ -60,6 +63,18 @@ export const settingsApi = {
 	},
 	getWorkspaceLsp(cwd: string): Promise<ProjectLspConfigResponse> {
 		return req<ProjectLspConfigResponse>(`/workspaces/${encodeURIComponent(cwd)}/lsp`);
+	},
+	getDapConfig(): Promise<DapConfigResponse> {
+		return req<DapConfigResponse>("/settings/dap");
+	},
+	updateDapConfig(body: UpdateDapConfigRequest): Promise<{ ok: true }> {
+		return req<{ ok: true }>("/settings/dap", { method: "PUT", body: JSON.stringify(body) });
+	},
+	getWorkspaceDap(cwd: string): Promise<ProjectDapConfigResponse> {
+		return req<ProjectDapConfigResponse>(`/workspaces/${encodeURIComponent(cwd)}/dap`);
+	},
+	updateWorkspaceDap(cwd: string, body: UpdateDapConfigRequest): Promise<{ ok: true }> {
+		return req<{ ok: true }>(`/workspaces/${encodeURIComponent(cwd)}/dap`, { method: "PUT", body: JSON.stringify(body) });
 	},
 	updateWorkspaceLsp(cwd: string, body: UpdateLspConfigRequest): Promise<{ ok: true }> {
 		return req<{ ok: true }>(`/workspaces/${encodeURIComponent(cwd)}/lsp`, { method: "PUT", body: JSON.stringify(body) });

@@ -318,6 +318,10 @@ const en = {
 			heading: "LSP",
 			intro: "Language-server integration for code intelligence. Writes to the omp config.yml.",
 		},
+		dap: {
+			heading: "Debug Adapters",
+			intro: "Debug adapter configuration for the DAP debug tool. Writes to dap.json.",
+		},
 		restart: "Restart",
 		reload: "Reload",
 		saveSettings: "Save Settings",

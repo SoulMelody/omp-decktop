@@ -291,6 +291,14 @@ const zhCN = {
 			inheritsDefault: "继承默认",
 			clear: "清除",
 		},
+		lsp: {
+			heading: "LSP",
+			intro: "语言服务器集成，用于代码智能。写入 omp config.yml。",
+		},
+		dap: {
+			heading: "调试适配器",
+			intro: "DAP 调试工具的调试适配器配置。写入 dap.json。",
+		},
 		restart: "重启",
 		reload: "重载",
 		saveSettings: "保存设置",
