@@ -7,6 +7,9 @@ import type {
 	RestartServerResponse,
 	RevealEnvValueResponse,
 	UpdateAgentConfigRequest,
+	UpdateLspConfigRequest,
+	LspConfigResponse,
+	ProjectLspConfigResponse,
 	UpdateModelRolesRequest,
 } from "@omp-deck/protocol";
 
@@ -48,6 +51,18 @@ export const settingsApi = {
 			method: "PUT",
 			body: JSON.stringify({ updates } satisfies UpdateAgentConfigRequest),
 		});
+	},
+	getLspConfig(): Promise<LspConfigResponse> {
+		return req<LspConfigResponse>("/settings/lsp");
+	},
+	updateLspConfig(body: UpdateLspConfigRequest): Promise<{ ok: true }> {
+		return req<{ ok: true }>("/settings/lsp", { method: "PUT", body: JSON.stringify(body) });
+	},
+	getWorkspaceLsp(cwd: string): Promise<ProjectLspConfigResponse> {
+		return req<ProjectLspConfigResponse>(`/workspaces/${encodeURIComponent(cwd)}/lsp`);
+	},
+	updateWorkspaceLsp(cwd: string, body: UpdateLspConfigRequest): Promise<{ ok: true }> {
+		return req<{ ok: true }>(`/workspaces/${encodeURIComponent(cwd)}/lsp`, { method: "PUT", body: JSON.stringify(body) });
 	},
 	modelRoles: {
 		list(): Promise<ModelRolesResponse> {
