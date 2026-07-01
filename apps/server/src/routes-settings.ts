@@ -22,6 +22,7 @@ import type {
 	UpdateLspConfigRequest,
 	DapConfigResponse,
 	ProjectDapConfigResponse,
+	DapAdapterConfig,
 	UpdateDapConfigRequest,
 } from "@omp-deck/protocol";
 
@@ -42,9 +43,6 @@ import {
 	writeManagedEnvUpdates,
 } from "./env-store.ts";
 import { setLogLevel } from "./log.ts";
-
-import { loadConfig as loadLspConfig } from "@oh-my-pi/pi-coding-agent/lsp/config";
-import { getAdapterConfigs } from "@oh-my-pi/pi-coding-agent/dap/config";
 
 export function buildSettingsRouter(
 	bridge: AgentBridge,
@@ -234,12 +232,17 @@ function normalizeServers(servers: Record<string, unknown> | undefined) {
 }
 
 async function loadGlobalLsp(cwd: string): Promise<LspConfigResponse> {
-	const config = loadLspConfig(cwd);
+	// Read the raw user-authored file directly, NOT via loadLspConfig(cwd).
+	// The SDK's loadConfig filters servers by hasRootMarkers + resolveCommand
+	// to produce the *runtime* server set; that's wrong for a config editor
+	// which must surface every entry the user has written, even ones that
+	// have no root marker in the current cwd or whose binary isn't on PATH.
+	const raw = (await readJsonFile(LSP_CONFIG_PATH)) as { servers?: Record<string, unknown>; idleTimeoutMs?: number } | null;
 	return {
 		...getLspScopePaths(cwd),
-		servers: normalizeServers(config.servers),
-		idleTimeoutMs: config.idleTimeoutMs,
-	} as unknown as LspConfigResponse;
+		servers: normalizeServers(raw?.servers),
+		idleTimeoutMs: raw?.idleTimeoutMs,
+	} as LspConfigResponse;
 }
 
 async function loadProjectLsp(cwd: string): Promise<ProjectLspConfigResponse> {
@@ -247,7 +250,7 @@ async function loadProjectLsp(cwd: string): Promise<ProjectLspConfigResponse> {
 	return {
 		...merged,
 		mergedFromProject: (await readJsonFile(path.join(cwd, "lsp.json"))) != null,
-	} as ProjectLspConfigResponse;
+	};
 }
 
 function lspBody(body: UpdateLspConfigRequest) {
@@ -295,11 +298,15 @@ function getDapScopePaths(cwd: string) {
 }
 
 async function loadGlobalDap(cwd: string): Promise<DapConfigResponse> {
-	const adapters = getAdapterConfigs(cwd);
+	// Read the raw user-authored file directly. getAdapterConfigs(cwd) merges
+	// ~15 built-in preset adapters into the result, which is what the runtime
+	// needs but is wrong for a config editor — the user only sees their own
+	// overrides, not every preset the SDK ships with.
+	const raw = (await readJsonFile(DAP_CONFIG_PATH)) as { adapters?: Record<string, unknown> } | null;
 	return {
 		...getDapScopePaths(cwd),
-		adapters: normalizeServers(adapters as unknown as Record<string, unknown>) as Record<string, unknown>,
-	} as unknown as DapConfigResponse;
+		adapters: normalizeServers(raw?.adapters) as unknown as Record<string, DapAdapterConfig>,
+	};
 }
 
 async function loadProjectDap(cwd: string): Promise<ProjectDapConfigResponse> {
@@ -307,7 +314,7 @@ async function loadProjectDap(cwd: string): Promise<ProjectDapConfigResponse> {
 	return {
 		...merged,
 		mergedFromProject: (await readJsonFile(path.join(cwd, "dap.json"))) != null,
-	} as ProjectDapConfigResponse;
+	};
 }
 
 function dapBody(body: UpdateDapConfigRequest) {
