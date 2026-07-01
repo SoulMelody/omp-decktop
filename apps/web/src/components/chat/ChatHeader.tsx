@@ -186,6 +186,7 @@ function Inner({ session }: { session: SessionUi }) {
 				<button
 					type="button"
 					onClick={() => setSwitcherOpen((v) => !v)}
+					className="btn-ghost h-7 gap-1 px-1.5 text-xs"
 					title="Switch sessions"
 				>
 					Switch
