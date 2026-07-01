@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createBrowserRouter, Outlet, RouterProvider, useLocation, useNavigate } from "react-router-dom";
 import { ChatView } from "./views/ChatView";
+import { FilesView } from "./views/FilesView";
 import { TasksView } from "./views/TasksView";
 import { RoutinesView } from "./views/RoutinesView";
 import { RunDetailView } from "./views/RunDetailView";
@@ -54,6 +55,7 @@ const router = createBrowserRouter([
 			{ path: "/skills", element: <SkillsView /> },
 			{ path: "/kb", element: <KbView /> },
 			{ path: "/integrations", element: <IntegrationsView /> },
+{ path: "/files", element: <FilesView /> },
 			{ path: "/settings", element: <SettingsView /> },
 			{ path: "/onboarding", element: <OnboardingView /> },
 		],

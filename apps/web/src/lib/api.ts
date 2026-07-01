@@ -13,7 +13,7 @@ import type {
 	McpUpdateRequest,
 	ModelRef,
 } from "@omp-deck/protocol";
-
+import type { FsReadResponse, FsTreeResponse } from "./types";
 const BASE = "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -128,5 +128,16 @@ export const api = {
 	},
 	testMcpConnection(name: string): Promise<McpTestResponse> {
 		return request<McpTestResponse>(`/mcp/${encodeURIComponent(name)}/test`, { method: "POST" });
+	},
+	readFile(cwd: string, filePath: string): Promise<FsReadResponse> {
+		return request<FsReadResponse>(
+			`/fs/read?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(filePath)}`,
+		);
+	},
+	listTree(cwd: string, dirPath?: string): Promise<FsTreeResponse> {
+		const qs = dirPath
+			? `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(dirPath)}`
+			: `?cwd=${encodeURIComponent(cwd)}`;
+		return request<FsTreeResponse>(`/fs/tree${qs}`);
 	},
 };

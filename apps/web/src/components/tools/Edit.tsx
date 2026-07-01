@@ -1,9 +1,14 @@
+import { Link } from "react-router-dom";
 import type { ToolRendererProps } from "./ToolCallCard";
-import { ArgRow, PathChip, Pre, extractResultText } from "./shared";
+import { ArgRow, Pre, extractResultText } from "./shared";
+import { useStore } from "@/lib/store";
 import { shortPath } from "@/lib/utils";
 import { CopyButton } from "@/lib/CopyButton";
 
-export function EditTool({ args, stream }: ToolRendererProps) {
+export function EditTool({ args, stream, sessionId }: ToolRendererProps) {
+	const cwd = useStore(
+		(s) => s.sessionsById[sessionId ?? ""]?.cwd ?? s.defaultCwd,
+	);
 	const path = String((args.path as string | undefined) ?? "");
 	const patch = String((args.patch ?? args.input ?? args.edits ?? "") as string);
 	const result = stream?.result ?? stream?.partialResult;
@@ -11,7 +16,17 @@ export function EditTool({ args, stream }: ToolRendererProps) {
 
 	return (
 		<div className="space-y-1.5">
-			<ArgRow k="path" v={<PathChip title={path}>{shortPath(path, 72)}</PathChip>} />
+			<ArgRow
+				k="path"
+				v={
+					<Link
+						to={`/files?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}`}
+						className="font-mono text-2xs text-ink-3 underline decoration-dotted underline-offset-2 hover:text-accent hover:decoration-solid"
+					>
+						{shortPath(path, 72)}
+					</Link>
+				}
+			/>
 			{patch ? <HashlinePatch patch={patch} /> : null}
 			{text ? (
 				<details open>

@@ -255,3 +255,14 @@ export interface SessionUi {
 	planMode?: PlanModeContextWire;
 	pendingPlanApproval?: PendingPlanApprovalWire;
 }
+
+// ─── File Browser ───────────────────────────────────────────────────────────
+
+export interface FsReadOk { ok: true; content: string; mime: string; size: number; }
+export interface FsReadErr { ok: false; error: string; }
+export type FsReadResponse = FsReadOk | FsReadErr;
+
+export interface FsTreeEntry { name: string; path: string; isDir: boolean; size?: number; }
+export interface FsTreeOk { ok: true; entries: FsTreeEntry[]; }
+export interface FsTreeErr { ok: false; error: string; }
+export type FsTreeResponse = FsTreeOk | FsTreeErr;

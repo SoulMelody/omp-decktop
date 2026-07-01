@@ -35,6 +35,7 @@ import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildCcSwitchRouter } from "./routes-ccswitch.ts";
 import { buildAgentOutputRouter } from "./routes-agent-output.ts";
+import { buildFsReadRouter } from "./routes-fs-read.ts";
 import { mcpApp } from "./routes-mcp.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
@@ -302,6 +303,7 @@ export function buildRouter(
 	app.route("/", buildUtilityRouter());
 	app.route("/", buildSlashCommandsRouter());
 	app.route("/", buildFsRouter());
+app.route("/", buildFsReadRouter());
 	app.route("/", buildSettingsRouter(bridge, config, opts));
 	app.route("/", buildOrientationRouter());
 	app.route("/", buildBridgesRouter(supervisor));

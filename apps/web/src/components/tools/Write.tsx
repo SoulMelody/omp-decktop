@@ -1,9 +1,14 @@
+import { Link } from "react-router-dom";
 import type { ToolRendererProps } from "./ToolCallCard";
-import { ArgRow, PathChip, extractResultText, SectionLabel } from "./shared";
+import { ArgRow, extractResultText, SectionLabel } from "./shared";
 import { CodeBlock, detectLangFromPath } from "@/lib/code";
+import { useStore } from "@/lib/store";
 import { formatBytes, shortPath } from "@/lib/utils";
 
-export function WriteTool({ args, stream }: ToolRendererProps) {
+export function WriteTool({ args, stream, sessionId }: ToolRendererProps) {
+	const cwd = useStore(
+		(s) => s.sessionsById[sessionId ?? ""]?.cwd ?? s.defaultCwd,
+	);
 	const path = String((args.path as string | undefined) ?? "");
 	const content = String((args.content as string | undefined) ?? "");
 	const bytes = new Blob([content]).size;
@@ -14,7 +19,17 @@ export function WriteTool({ args, stream }: ToolRendererProps) {
 
 	return (
 		<div className="space-y-1.5">
-			<ArgRow k="path" v={<PathChip title={path}>{shortPath(path, 72)}</PathChip>} />
+			<ArgRow
+				k="path"
+				v={
+					<Link
+						to={`/files?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}`}
+						className="font-mono text-2xs text-ink-3 underline decoration-dotted underline-offset-2 hover:text-accent hover:decoration-solid"
+					>
+						{shortPath(path, 72)}
+					</Link>
+				}
+			/>
 			<ArgRow k="size" v={`${formatBytes(bytes)} · ${lineCount} line${lineCount === 1 ? "" : "s"}`} />
 			{content ? (
 				<details>
