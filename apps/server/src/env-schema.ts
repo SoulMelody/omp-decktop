@@ -58,12 +58,12 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 	},
 	{
 		key: "OMP_DECK_IDLE_TIMEOUT_MS",
-		defaultValue: "300000",
+		defaultValue: "0",
 		valueType: "int",
 		sensitive: false,
 		restartRequired: false,
 		hotApply: true,
-		description: "Milliseconds before unsubscribed idle sessions are reaped. 0 disables reaping.",
+		description: "Milliseconds before unsubscribed idle sessions are reaped. 0 disables reaping (default).",
 	},
 	{
 		key: "OMP_DECK_AUTO_START",

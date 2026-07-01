@@ -82,8 +82,8 @@ export function loadConfig(): Config {
 		agentDir,
 		webDist,
 		devMode: process.env.NODE_ENV !== "production",
-		// 5 minutes default. Set to 0 to disable reaping (kernels live until SIGINT).
-		idleTimeoutMs: parseInt10(process.env.OMP_DECK_IDLE_TIMEOUT_MS, 5 * 60_000),
+		// 0 disables reaping (default). Sessions persist on disk until explicitly deleted.
+		idleTimeoutMs: parseInt10(process.env.OMP_DECK_IDLE_TIMEOUT_MS, 0),
 		dbPath: path.resolve(
 			process.env.OMP_DECK_DB_PATH?.trim() ||
 				process.env.OMP_DECK_DB?.trim() ||

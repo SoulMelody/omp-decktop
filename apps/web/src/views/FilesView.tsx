@@ -39,10 +39,11 @@ export function FilesView() {
 		const urlPath = params.get("path");
 		if (!urlPath) return;
 		const id = makeTabId(cwd, urlPath);
-		if (!tabs.some((t) => t.id === id)) {
+		setTabs((prev) => {
+			if (prev.some((t) => t.id === id)) return prev;
 			const tab: FileTab = { id, filePath: urlPath, cwd, label: basename(urlPath) };
-			setTabs((prev) => (prev.length >= MAX_TABS ? [...prev.slice(1), tab] : [...prev, tab]));
-		}
+			return prev.length >= MAX_TABS ? [...prev.slice(1), tab] : [...prev, tab];
+		});
 		setActiveTabId(id);
 		const next = new URLSearchParams(params);
 		next.delete("path");
@@ -53,26 +54,27 @@ export function FilesView() {
 	const openFile = useCallback(
 		(filePath: string) => {
 			const id = makeTabId(cwd, filePath);
-			if (!tabs.some((t) => t.id === id)) {
+			setTabs((prev) => {
+				if (prev.some((t) => t.id === id)) return prev;
 				const tab: FileTab = { id, filePath, cwd, label: basename(filePath) };
-				setTabs((prev) => (prev.length >= MAX_TABS ? [...prev.slice(1), tab] : [...prev, tab]));
-			}
+				return prev.length >= MAX_TABS ? [...prev.slice(1), tab] : [...prev, tab];
+			});
 			setActiveTabId(id);
 		},
-		[cwd, tabs],
+		[cwd],
 	);
 
-	const closeTab = useCallback(
-		(id: string) => {
-			setTabs((prev) => {
-				const idx = prev.findIndex((t) => t.id === id);
-				const next = prev.filter((t) => t.id !== id);
-				if (activeTabId === id) setActiveTabId(next[Math.min(idx, next.length - 1)]?.id ?? null);
-				return next;
-			});
-		},
-		[activeTabId],
-	);
+	const closeTab = useCallback((id: string) => {
+		setTabs((prev) => {
+			const idx = prev.findIndex((t) => t.id === id);
+			if (idx < 0) return prev;
+			const next = prev.filter((t) => t.id !== id);
+			// if the closed tab was active, switch to neighbor
+			const fallbackIdx = Math.min(idx, next.length - 1);
+			setActiveTabId(next[fallbackIdx]?.id ?? null);
+			return next;
+		});
+	}, []);
 
 	const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
