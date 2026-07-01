@@ -50,7 +50,7 @@ export function RoutineEditor({ routine, onClose, onSaved, onDeleted }: Props) {
 	const canSwitchMode = isNew;
 
 	async function remove(): Promise<void> {
-		if (isNew) return;
+		if (routine === "new") return;
 		if (!confirm(`Delete routine "${routine.name}"?`)) return;
 		try {
 			await routinesApi.remove(routine.id);

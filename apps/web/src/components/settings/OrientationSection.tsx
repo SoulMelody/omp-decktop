@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import type {
@@ -20,17 +21,13 @@ import { settingsApi } from "@/lib/settings-api";
  * for the prelude-vs-orchestrator architecture that motivated this surface.
  */
 export function OrientationSection() {
+	const { t } = useTranslation();
 	return (
 		<div className="mx-auto max-w-5xl space-y-6">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">Orientation</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("settings.orientation.heading")}</h1>
 				<p className="mt-1 max-w-3xl text-sm text-ink-3">
-					Three artifacts shape every deck session: the system-prompt prelude,
-					the <code className="font-mono text-xs">/start</code> orchestrator
-					fired on boot, and the maintenance-gate extension that nudges the
-					agent to capture work mid-session. Edit each in place; changes
-					take effect on the next session create (prelude) or the next slash
-					invocation (start) or the next gate evaluation (maintenance).
+					{t("settings.orientation.intro")}
 				</p>
 			</div>
 			<PreludeCard />
@@ -41,6 +38,7 @@ export function OrientationSection() {
 }
 
 function PreludeCard() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<PreludeResponse | null>(null);
 	const [draft, setDraft] = useState("");
 	const [loading, setLoading] = useState(true);
@@ -74,7 +72,7 @@ function PreludeCard() {
 			const next = await orientationApi.putPrelude({ value: draft });
 			setData(next);
 			setDraft(next.override ?? next.default);
-			setStatus("Saved. New sessions will use this prelude.");
+			setStatus(t("settings.orientation.savedPrelude"));
 			setError(undefined);
 			window.setTimeout(() => setStatus(undefined), 3000);
 		} catch (e) {
@@ -90,7 +88,7 @@ function PreludeCard() {
 			const next = await orientationApi.putPrelude({ value: null });
 			setData(next);
 			setDraft(next.default);
-			setStatus("Override cleared. New sessions will use the bundled default.");
+			setStatus(t("settings.orientation.overrideCleared"));
 			setError(undefined);
 			window.setTimeout(() => setStatus(undefined), 3000);
 		} catch (e) {
@@ -104,14 +102,11 @@ function PreludeCard() {
 		<div className="overflow-hidden rounded-md border border-line bg-paper">
 			<div className="border-b border-line bg-paper-2 px-3 py-2">
 				<div className="flex items-center gap-2">
-					<div className="meta">Prelude</div>
-					{usingOverride ? <Badge tone="accent">override</Badge> : <Badge tone="muted">default</Badge>}
+					<div className="meta">{t("settings.orientation.prelude")}</div>
+					{usingOverride ? <Badge tone="accent">{t("settings.orientation.overridden")}</Badge> : <Badge tone="muted">{t("settings.orientation.byDefault")}</Badge>}
 				</div>
 				<p className="mt-1 text-xs text-ink-3">
-					Prepended to every session&rsquo;s system prompt at{" "}
-					<code className="font-mono">createAgentSession</code>. Imperatives belong
-					in <code className="font-mono">/start</code>, not here&mdash; the prelude
-					is reference material that the orchestrator can rely on.
+					{t("settings.orientation.preludeDesc")}
 				</p>
 				<div className="mt-1 font-mono text-2xs text-ink-3">
 					{data?.path ?? "..."}
@@ -129,7 +124,7 @@ function PreludeCard() {
 					</div>
 				) : null}
 				{loading ? (
-					<div className="text-sm text-ink-3">Loading...</div>
+					<div className="text-sm text-ink-3">{t("common.status.loading")}</div>
 				) : (
 					<>
 						<textarea
@@ -141,7 +136,7 @@ function PreludeCard() {
 						<div className="flex flex-wrap items-center gap-2">
 							<Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
 								<Save className="h-3.5 w-3.5" />
-								Save
+								{t("common.actions.save")}
 							</Button>
 							<Button
 								size="sm"
@@ -150,10 +145,10 @@ function PreludeCard() {
 								disabled={saving || !usingOverride}
 							>
 								<RotateCcw className="h-3.5 w-3.5" />
-								Reset to default
+								{t("common.actions.reset")}
 							</Button>
 							{dirty ? (
-								<span className="font-mono text-2xs text-warn">Unsaved changes</span>
+								<span className="font-mono text-2xs text-warn">{t("settings.orientation.unsavedPrelude")}</span>
 							) : null}
 						</div>
 					</>
@@ -164,6 +159,7 @@ function PreludeCard() {
 }
 
 function StartCommandCard() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<StartCommand | null>(null);
 	const [description, setDescription] = useState("");
 	const [body, setBody] = useState("");
@@ -208,8 +204,7 @@ function StartCommandCard() {
 				OMP_DECK_AUTO_START: enabled ? "/start" : "",
 			});
 			setAutoStartEnabled(enabled);
-			setStatus(enabled ? "Auto-start enabled. New sessions will fire /start." : "Auto-start disabled. New sessions will open silently.");
-			window.setTimeout(() => setStatus(undefined), 3000);
+			setStatus(enabled ? t("settings.startOrchestrator.autoStartEnabled") : t("settings.startOrchestrator.autoStartDisabled"));
 		} catch (e) {
 			setError(String(e));
 		} finally {
@@ -226,8 +221,7 @@ function StartCommandCard() {
 			setData(next);
 			setDescription(next.description);
 			setBody(next.body);
-			setStatus("Saved. Next /start invocation will use this body.");
-			setError(undefined);
+			setStatus(t("settings.startOrchestrator.saved"));
 			window.setTimeout(() => setStatus(undefined), 3000);
 		} catch (e) {
 			setError(String(e));
@@ -240,8 +234,8 @@ function StartCommandCard() {
 		<div className="overflow-hidden rounded-md border border-line bg-paper">
 			<div className="border-b border-line bg-paper-2 px-3 py-2">
 				<div className="flex items-center gap-2">
-					<div className="meta">/start orchestrator</div>
-					{data?.exists ? <Badge tone="default">on disk</Badge> : <Badge tone="warn">missing</Badge>}
+					<div className="meta">{t("settings.startOrchestrator.title")}</div>
+					{data?.exists ? <Badge tone="default">{t("settings.startOrchestrator.onDisk")}</Badge> : <Badge tone="warn">{t("settings.startOrchestrator.missing")}</Badge>}
 					<span className="ml-auto" />
 					<label className="flex items-center gap-2 text-xs text-ink-2">
 						<input
@@ -250,16 +244,11 @@ function StartCommandCard() {
 							disabled={autoStartSaving}
 							onChange={(e) => void toggleAutoStart(e.target.checked)}
 						/>
-						<span>Auto-start on new session</span>
+						<span>{t("settings.startOrchestrator.autoStart")}</span>
 					</label>
 				</div>
 				<p className="mt-1 text-xs text-ink-3">
-					First user message fired on session boot. Re-read every invocation,
-					so saves take effect immediately. Numbered procedures here outrank
-					prelude imperatives by recency&mdash;put DO-THIS instructions in this
-					body, not in the prelude above. Toggle &ldquo;Auto-start&rdquo; to
-					control whether <code className="font-mono">/start</code> fires
-					automatically on every new session.
+					{t("settings.startOrchestrator.desc")}
 				</p>
 				<div className="mt-1 font-mono text-2xs text-ink-3">
 					{data?.path ?? "..."}
@@ -277,21 +266,21 @@ function StartCommandCard() {
 					</div>
 				) : null}
 				{loading ? (
-					<div className="text-sm text-ink-3">Loading...</div>
+					<div className="text-sm text-ink-3">{t("common.status.loading")}</div>
 				) : (
 					<>
 						<label className="block space-y-1">
-							<span className="meta">description</span>
+							<span className="meta">{t("settings.startOrchestrator.descriptionLabel")}</span>
 							<input
 								type="text"
 								value={description}
 								onChange={(e) => setDescription(e.target.value)}
-								placeholder="One-line summary (frontmatter description:)"
+								placeholder={t("settings.startOrchestrator.placeholder")}
 								className="block w-full rounded-md border border-line bg-paper-2 px-3 py-2 font-mono text-xs text-ink"
 							/>
 						</label>
 						<label className="block space-y-1">
-							<span className="meta">body</span>
+							<span className="meta">{t("settings.startOrchestrator.bodyLabel")}</span>
 							<textarea
 								value={body}
 								onChange={(e) => setBody(e.target.value)}
@@ -302,10 +291,10 @@ function StartCommandCard() {
 						<div className="flex flex-wrap items-center gap-2">
 							<Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
 								<Save className="h-3.5 w-3.5" />
-								Save
+								{t("common.actions.save")}
 							</Button>
 							{dirty ? (
-								<span className="font-mono text-2xs text-warn">Unsaved changes</span>
+								<span className="font-mono text-2xs text-warn">{t("settings.orientation.unsaved")}</span>
 							) : null}
 						</div>
 					</>
@@ -316,6 +305,7 @@ function StartCommandCard() {
 }
 
 function MaintenanceGateCard() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<MaintenanceGateState | null>(null);
 	const [draft, setDraft] = useState<{
 		enabled: boolean;
@@ -364,8 +354,7 @@ function MaintenanceGateCard() {
 		const parsedRel = parseKnob(draft.minReleaseAgeMs);
 		const parsedFire = parseKnob(draft.fireFloorMs);
 		if (Number.isNaN(parsedOp) || Number.isNaN(parsedRel) || Number.isNaN(parsedFire)) {
-			setError("Each knob must be a positive integer or empty (to clear override).");
-			return;
+			setError(t("settings.maintenance.knobError"));
 		}
 		setSaving(true);
 		try {
@@ -382,8 +371,7 @@ function MaintenanceGateCard() {
 				minReleaseAgeMs: String(next.knobs.minReleaseAgeMs.rawValue ?? ""),
 				fireFloorMs: String(next.knobs.fireFloorMs.rawValue ?? ""),
 			});
-			setStatus("Saved. Gate will use these values on the next evaluation.");
-			setError(undefined);
+			setStatus(t("settings.maintenance.saved"));
 			window.setTimeout(() => setStatus(undefined), 3000);
 		} catch (e) {
 			setError(String(e));
@@ -404,22 +392,18 @@ function MaintenanceGateCard() {
 		<div className="overflow-hidden rounded-md border border-line bg-paper">
 			<div className="border-b border-line bg-paper-2 px-3 py-2">
 				<div className="flex items-center gap-2">
-					<div className="meta">Maintenance gate</div>
-					{profile === "deck" ? <Badge tone="accent">deck profile</Badge> : null}
-					{profile === "flat-file" ? <Badge tone="default">flat-file profile</Badge> : null}
-					{profile === "inactive" ? <Badge tone="muted">inactive</Badge> : null}
+					<div className="meta">{t("settings.maintenance.gate")}</div>
+					{profile === "deck" ? <Badge tone="accent">{t("settings.maintenance.deckProfile")}</Badge> : null}
+					{profile === "flat-file" ? <Badge tone="default">{t("settings.maintenance.flatFileProfile")}</Badge> : null}
+					{profile === "inactive" ? <Badge tone="muted">{t("settings.maintenance.inactive")}</Badge> : null}
 				</div>
 				<p className="mt-1 text-xs text-ink-3">
-					Nudges the agent at <code className="font-mono">turn_end</code> to capture
-					insights / decisions / tasks into the appropriate destination. Fires at
-					most once per release segment, gated by three floors. Disabling here
-					skips org-root detection so even an unaltered installed extension
-					stays silent.
+					{t("settings.maintenance.desc")}
 				</p>
 				<div className="mt-1 space-y-0.5 font-mono text-2xs text-ink-3">
 					<div>extension: {data?.installedExtensionPath ?? "..."}</div>
-					<div>installed: {data ? (data.installedExtensionPresent ? "yes" : "missing") : "..."}</div>
-					<div>OMP_DECK_ORG_ROOT: {data?.orgRoot ?? "(unset)"} ({data?.orgRootSource ?? ""})</div>
+					<div>installed: {data ? (data.installedExtensionPresent ? t("settings.maintenance.installedYes") : t("settings.maintenance.installedMissing")) : "..."}</div>
+					<div>OMP_DECK_ORG_ROOT: {data?.orgRoot ?? t("settings.maintenance.unset")} ({data?.orgRootSource ?? ""})</div>
 				</div>
 			</div>
 			<div className="space-y-4 p-4">
@@ -434,7 +418,7 @@ function MaintenanceGateCard() {
 					</div>
 				) : null}
 				{loading || !draft || !data ? (
-					<div className="text-sm text-ink-3">Loading...</div>
+					<div className="text-sm text-ink-3">{t("common.status.loading")}</div>
 				) : (
 					<>
 						<label className="flex items-center gap-2 text-sm">
@@ -443,7 +427,7 @@ function MaintenanceGateCard() {
 								checked={draft.enabled}
 								onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
 							/>
-							<span>Enabled</span>
+							<span>{t("settings.maintenance.enabled")}</span>
 							<span className="ml-2 font-mono text-2xs text-ink-3">
 								OMP_DECK_MAINTENANCE_GATE_DISABLED = {data.disabledRaw ?? "(unset)"} ({data.disabledSource})
 							</span>
@@ -451,22 +435,22 @@ function MaintenanceGateCard() {
 
 						<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
 							<GateKnobInput
-								label="minOpMsgs"
-								help="Operator messages since last release"
+								label={t("settings.maintenance.minOpMsgs")}
+								help={t("settings.maintenance.minOpMsgs")}
 								knob={data.knobs.minOpMsgs}
 								value={draft.minOpMsgs}
 								onChange={(v) => setDraft({ ...draft, minOpMsgs: v })}
 							/>
 							<GateKnobInput
-								label="minReleaseAgeMs"
-								help="Wall-clock ms since last release"
+								label={t("settings.maintenance.minReleaseAge")}
+								help={t("settings.maintenance.minReleaseAge")}
 								knob={data.knobs.minReleaseAgeMs}
 								value={draft.minReleaseAgeMs}
 								onChange={(v) => setDraft({ ...draft, minReleaseAgeMs: v })}
 							/>
 							<GateKnobInput
-								label="fireFloorMs"
-								help="Wall-clock ms between fires (cross-session)"
+								label={t("settings.maintenance.fireFloor")}
+								help={t("settings.maintenance.fireFloor")}
 								knob={data.knobs.fireFloorMs}
 								value={draft.fireFloorMs}
 								onChange={(v) => setDraft({ ...draft, fireFloorMs: v })}
@@ -476,37 +460,36 @@ function MaintenanceGateCard() {
 						<div className="flex flex-wrap items-center gap-2">
 							<Button size="sm" onClick={() => void save()} disabled={saving}>
 								<Save className="h-3.5 w-3.5" />
-								Save
+								{t("common.actions.save")}
 							</Button>
 							<Button size="sm" variant="outline" onClick={() => void refresh()} disabled={saving}>
 								<RotateCcw className="h-3.5 w-3.5" />
-								Reload
+								{t("settings.maintenance.reload")}
 							</Button>
 							{!data.installedExtensionPresent ? (
 								<span className="font-mono text-2xs text-warn">
-									Extension not installed at expected path; knob changes won&rsquo;t take effect until
-									it&rsquo;s restored.
+									{t("settings.maintenance.extensionMissing")}
 								</span>
 							) : null}
 						</div>
 
 						<div className="overflow-hidden rounded-md border border-line bg-paper-2">
 							<div className="flex items-center gap-2 border-b border-line px-3 py-2">
-								<div className="meta">Reminder preview</div>
+								<div className="meta">{t("settings.maintenance.reminderPreview")}</div>
 								<div className="ml-auto flex items-center gap-1">
 									<Button
 										size="sm"
 										variant={previewMode === "deck" ? "primary" : "outline"}
 										onClick={() => setPreviewMode("deck")}
 									>
-										deck
+										{t("settings.maintenance.deck")}
 									</Button>
 									<Button
 										size="sm"
 										variant={previewMode === "flat-file" ? "primary" : "outline"}
 										onClick={() => setPreviewMode("flat-file")}
 									>
-										flat-file
+										{t("settings.maintenance.flatFile")}
 									</Button>
 								</div>
 							</div>
@@ -534,6 +517,7 @@ function GateKnobInput({
 	value: string;
 	onChange: (v: string) => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<label className="block space-y-1">
 			<span className="meta">{label}</span>
@@ -549,7 +533,7 @@ function GateKnobInput({
 				{help}
 			</div>
 			<div className="font-mono text-2xs text-ink-3">
-				effective {knob.value} · default {knob.default} · source {knob.source}
+				{t("settings.maintenance.effective", { value: knob.value })} · {t("settings.maintenance.defaultValue", { value: knob.default })} · {t("settings.maintenance.sourceLabel", { source: knob.source })}
 			</div>
 		</label>
 	);

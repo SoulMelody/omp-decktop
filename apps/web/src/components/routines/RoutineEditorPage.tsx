@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import type { Routine, RoutineActionKind } from "@omp-deck/protocol";
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function RoutineEditorPage({ routine, onBack, onSaved, onDeleted }: Props) {
+	const { t } = useTranslation();
 	const isNew = routine === "new";
 	const existingMode: Mode = !isNew && routine.specVersion === 1 ? "v1" : "v0";
 	const [mode, setMode] = useState<Mode>(isNew ? "v1" : existingMode);
@@ -127,6 +129,7 @@ function V0EditorPage({
 	onSaved: (saved: Routine) => void;
 	onError: (msg: string) => void;
 }) {
+	const { t } = useTranslation();
 	const isNew = routine === "new";
 	const initial = useMemo(
 		() =>

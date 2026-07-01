@@ -4,6 +4,7 @@ import { cn, formatTokens } from "@/lib/utils";
 
 const STATUS_TONE: Record<string, string> = {
 	idle: "text-ink-3",
+	preparing: "text-thinking",
 	streaming: "text-accent",
 	compacting: "text-warn",
 	retrying: "text-warn",

@@ -34,6 +34,7 @@ import { buildOrientationRouter } from "./routes-orientation.ts";
 import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildCcSwitchRouter } from "./routes-ccswitch.ts";
+import { buildAgentOutputRouter } from "./routes-agent-output.ts";
 import { mcpApp } from "./routes-mcp.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
@@ -240,6 +241,7 @@ export function buildRouter(
 	app.route("/", buildUploadsRouter({ uploadsRoot: config.uploadsRoot }));
 	app.route("/", buildRoutinesRouter(runner));
 	app.route("/", buildHooksRouter(runner));
+	app.route("/", buildAgentOutputRouter());
 	app.route("/", buildInboxRouter());
 	app.route("/", buildUtilityRouter());
 	app.route("/", buildSlashCommandsRouter());

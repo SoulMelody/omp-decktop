@@ -24,6 +24,23 @@ export function Chat() {
 	const messages = session?.messages ?? [];
 	const toolCalls = session?.toolCalls ?? {};
 	const queuedPrompts = session?.queuedPrompts ?? [];
+
+	// A "busy but nothing visible yet" indicator. Covers the silent windows
+	// where the agent is working but no live content is on screen: right after
+	// submit ("preparing"), and the time-to-first-token gap between `turn_start`
+	// and the first streamed output. Suppressed once an assistant message is
+	// actively streaming or a tool is running, since those render their own
+	// live state — avoids a redundant second spinner.
+	const lastMessage = messages[messages.length - 1];
+	const tailIsLiveAssistant =
+		lastMessage != null && lastMessage.role === "assistant" && lastMessage.isStreaming === true;
+	const anyToolRunning = Object.values(toolCalls).some((t) => t.status === "running");
+	const busyHint =
+		session?.status === "preparing"
+			? "preparing…"
+			: session?.status === "streaming" && !tailIsLiveAssistant && !anyToolRunning
+				? "working…"
+				: null;
 	const railItems = useMemo(() => buildRailItems(messages), [messages]);
 	const railAnchorIds = useMemo(() => new Set(railItems.map((item) => item.id)), [railItems]);
 
@@ -50,7 +67,7 @@ export function Chat() {
 			el.scrollTop = el.scrollHeight;
 		}
 		syncActiveAnchor();
-	}, [messages, queuedPrompts, syncActiveAnchor, toolCalls]);
+	}, [messages, queuedPrompts, syncActiveAnchor, toolCalls, session?.status]);
 
 	useEffect(() => {
 		syncActiveAnchor();
@@ -178,6 +195,11 @@ export function Chat() {
 					{queuedPrompts.map((q) => (
 						<QueuedMessage key={q.id} msg={q} />
 					))}
+					{busyHint ? (
+						<div className="cursor-blink font-mono text-2xs uppercase tracking-meta text-thinking">
+							{busyHint}
+						</div>
+					) : null}
 					{session.pendingPlanApproval ? (
 						<PlanApproval session={session} />
 					) : null}

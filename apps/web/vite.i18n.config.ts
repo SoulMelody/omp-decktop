@@ -46,10 +46,8 @@ export default defineConfig({
 	},
 	css: {
 		postcss: {
-			plugins: [
-				tailwindcss({ config: path.resolve(webRoot, "tailwind.config.ts") }),
-				autoprefixer(),
-			],
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			plugins: [tailwindcss({ config: path.resolve(webRoot, "tailwind.config.ts") }) as any, autoprefixer() as any],
 		},
 	},
 });

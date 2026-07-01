@@ -196,7 +196,11 @@ export interface SessionUi {
 	toolCalls: Record<string, ToolCallStream>;
 	todoPhases: TodoPhase[];
 
-	status: "idle" | "streaming" | "compacting" | "retrying";
+	// "preparing" is a client-only optimistic state: set the instant a prompt
+	// is sent to an idle session, superseded by the server's "streaming" once
+	// `turn_start` arrives. Bridges the network round-trip so the UI reacts
+	// immediately. The reducer never produces it — only `sendPrompt` does.
+	status: "idle" | "preparing" | "streaming" | "compacting" | "retrying";
 
 	retry?: {
 		attempt: number;

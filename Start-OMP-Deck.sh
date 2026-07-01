@@ -25,7 +25,7 @@ case "${1:-foreground}" in
       exit 0
     fi
     bun install --frozen-lockfile > "$LOG_DIR/install.log" 2>&1
-    nohup bun run dev:zh > "$LOG_FILE" 2>&1 &
+    nohup bun run dev > "$LOG_FILE" 2>&1 &
     PID=$!
     echo "$PID" > "$PID_FILE"
     echo "omp-deck started (PID $PID). Logs: $LOG_FILE"
@@ -61,7 +61,7 @@ case "${1:-foreground}" in
     fi
     ;;
   foreground|"")
-    # No-argument run = foreground, same shape as `bun run dev:zh`. Ctrl+C
+    # No-argument run = foreground, same shape as `bun run dev`. Ctrl+C
     # cleans up. Skips the install step — assume the developer already
     # ran `bun install`.
     #
@@ -89,7 +89,7 @@ case "${1:-foreground}" in
       fi
     }
     trap _cleanup_foreground INT TERM EXIT
-    bun run dev:zh &
+    bun run dev &
     _BUN_PID=$!
     wait $_BUN_PID
     ;;
@@ -97,7 +97,7 @@ case "${1:-foreground}" in
     cat <<USAGE
 Usage: $0 [start|stop|status|foreground]
 
-  (no arg)     foreground run, same as 'bun run dev:zh'
+  (no arg)     foreground run, same as 'bun run dev'
   start        background, writes PID + logs to $LOG_DIR/, opens browser
   stop         terminate the background run started via 'start'
   status       check whether a background run is alive

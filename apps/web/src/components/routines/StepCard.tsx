@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Trash2 } from "lucide-react";
 
 import type { RoutineStep } from "@omp-deck/protocol";
@@ -29,6 +30,7 @@ export function StepCard({
 	onMoveUp,
 	onMoveDown,
 }: Props) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(true);
 	const idsExcludingSelf = existingIds.filter((_id, i) => i !== index);
 

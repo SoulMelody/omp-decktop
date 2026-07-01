@@ -13,10 +13,9 @@
  */
 
 import { useEffect, useState } from "react";
-
+import { useTranslation } from "react-i18next";
 import { useStore } from "../lib/store";
-
-const HEALTHY_MS = 10_000;
+const HEALTHY_MS = 1_000;
 const WARN_MS = 20_000;
 
 type DotColor = "green" | "yellow" | "red";

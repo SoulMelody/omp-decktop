@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import type { ProviderInfo } from "@omp-deck/protocol";
 import type { CcSwitchProvider, CcSwitchImportResultEntry } from "@omp-deck/protocol";
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 type ProviderTab = "loggedin" | "unconfigured" | "ccswitch";
 
 export function ProvidersSection() {
+	const { t } = useTranslation();
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [error, setError] = useState<string | undefined>();
 	const [loading, setLoading] = useState(true);
@@ -61,7 +63,7 @@ export function ProvidersSection() {
 	}
 
 	if (loading) {
-		return <div className="font-mono text-2xs text-ink-3">Loading providers…</div>;
+		return <div className="font-mono text-2xs text-ink-3">{t("settings.providers.loading")}</div>;
 	}
 	if (error && !providers) {
 		return (
@@ -73,18 +75,17 @@ export function ProvidersSection() {
 	if (!providers) return null;
 
 	const tabs: { id: ProviderTab; label: string; count: number }[] = [
-		{ id: "loggedin", label: "Logged In", count: loggedIn.length },
-		{ id: "unconfigured", label: "Not Configured", count: unconfigured.length },
-		{ id: "ccswitch", label: "cc-switch", count: 0 },
+		{ id: "loggedin", label: t("settings.providers.loggedIn"), count: loggedIn.length },
+		{ id: "unconfigured", label: t("settings.providers.notConfigured"), count: unconfigured.length },
+		{ id: "ccswitch", label: t("settings.providers.ccSwitch"), count: 0 },
 	];
 
 	return (
 		<div className="flex flex-col gap-4">
 			<div>
-				<h2 className="meta">Providers</h2>
+				<h2 className="meta">{t("settings.sections.providers.label")}</h2>
 				<p className="mt-1 text-xs text-ink-3">
-					OAuth sign-in to subscription providers (Claude Pro/Max, ChatGPT Plus/Pro, etc.).
-					API keys live under <strong>Env</strong> — this surface is for browser-flow auth.
+					{t("settings.providers.intro")}
 				</p>
 			</div>
 
@@ -143,7 +144,7 @@ export function ProvidersSection() {
 					</div>
 				) : (
 					<div className="rounded border border-dashed border-line p-6 text-center text-xs text-ink-4">
-						No providers configured yet. Switch to <strong>Not Configured</strong> tab to log in.
+						{t("settings.providers.noProvidersConfigured")}
 					</div>
 				)
 			) : null}
@@ -162,7 +163,7 @@ export function ProvidersSection() {
 					</div>
 				) : (
 					<div className="rounded border border-dashed border-line p-6 text-center text-xs text-ink-4">
-						All providers are configured!
+						{t("settings.providers.allConfigured")}
 					</div>
 				)
 			) : null}
@@ -182,19 +183,17 @@ export function ProvidersSection() {
 			<Modal open={confirmRevoke !== null} onClose={() => setConfirmRevoke(null)} widthClass="max-w-md">
 				<div className="flex flex-col gap-3 p-5">
 					<h2 className="text-base font-semibold text-ink">
-						Sign out of {confirmRevoke?.name}?
+						{t("settings.providers.signOutOf", { name: confirmRevoke?.name })}
 					</h2>
 					<p className="text-xs text-ink-3">
-						The stored credentials will be deleted from <code>auth.db</code>. Token refresh
-						will fail until you log in again. Other deck instances sharing the same
-						<code>OMP_AGENT_DIR</code> will lose access too.
+						{t("settings.providers.signOutDesc")}
 					</p>
 					<div className="flex justify-end gap-2 border-t border-line pt-3">
 						<Button variant="ghost" onClick={() => setConfirmRevoke(null)} disabled={revoking}>
-							Cancel
+							{t("common.actions.cancel")}
 						</Button>
 						<Button variant="danger" onClick={revoke} disabled={revoking}>
-							{revoking ? "Signing out…" : "Sign out"}
+							{revoking ? t("settings.providers.signingOut") : t("settings.providers.signOut")}
 						</Button>
 					</div>
 				</div>
@@ -212,6 +211,7 @@ function ProviderCard({
 	onLogin: () => void;
 	onRevoke: () => void;
 }) {
+	const { t } = useTranslation();
 	const tone =
 		info.state === "oauth"
 			? "border-success/40 bg-success/5"
@@ -220,10 +220,10 @@ function ProviderCard({
 				: "border-line bg-paper-2/30";
 	const stateLabel =
 		info.state === "oauth"
-			? "OAuth (subscription)"
+			? t("settings.providers.oauthState")
 			: info.state === "api-key"
-				? "API key configured"
-				: "Not configured";
+				? t("settings.providers.apiKeyState")
+				: t("settings.providers.notConfigured");
 	const stateBadgeTone: "success" | "accent" | "default" =
 		info.state === "oauth" ? "success" : info.state === "api-key" ? "accent" : "default";
 	return (
@@ -236,25 +236,25 @@ function ProviderCard({
 			</div>
 			<div className="font-mono text-2xs text-ink-4">
 				{info.id}
-				{info.count > 1 ? <span className="ml-1.5">· {info.count} credentials</span> : null}
+				{info.count > 1 ? <span className="ml-1.5">{t("settings.providers.credentialsCount", { count: info.count })}</span> : null}
 			</div>
 			<div className="mt-1 flex gap-2">
 				{info.state === "unconfigured" ? (
 					<Button variant="primary" onClick={onLogin} className="flex-1">
-						Login
+						{t("settings.providers.login")}
 					</Button>
 				) : info.state === "oauth" ? (
 					<>
 						<Button variant="outline" onClick={onLogin} className="flex-1">
-							Replace
+							{t("settings.providers.replace")}
 						</Button>
 						<Button variant="ghost" onClick={onRevoke}>
-							Sign out
+							{t("settings.providers.signOut")}
 						</Button>
 					</>
 				) : (
 					<Button variant="outline" onClick={onLogin} className="flex-1">
-						Login (replaces API key)
+						{t("settings.providers.loginReplaces")}
 					</Button>
 				)}
 			</div>
@@ -265,6 +265,7 @@ function ProviderCard({
 // ─── cc-switch import panel (tab content) ───────────────────────────────────
 
 function CcSwitchPanel() {
+	const { t } = useTranslation();
 	const [providers, setProviders] = useState<CcSwitchProvider[] | null>(null);
 	const [dbPath, setDbPath] = useState("");
 	const [accessible, setAccessible] = useState(true);
@@ -340,8 +341,7 @@ function CcSwitchPanel() {
 	return (
 		<div className="flex flex-col gap-3">
 			<p className="text-xs text-ink-3">
-				Import provider configurations from the cc-switch desktop app. Selected providers
-				will be registered as omp SDK extensions at <code>~/.omp/agent/extensions/</code>.
+				{t("settings.ccSwitch.intro")}
 			</p>
 
 					{dbPath ? (
@@ -349,7 +349,7 @@ function CcSwitchPanel() {
 					) : null}
 
 					{loading ? (
-						<div className="font-mono text-2xs text-ink-3">Loading cc-switch providers…</div>
+						<div className="font-mono text-2xs text-ink-3">{t("settings.ccSwitch.loading")}</div>
 					) : null}
 
 					{error ? (
@@ -362,7 +362,7 @@ function CcSwitchPanel() {
 						<>
 							<div className="flex items-center gap-2">
 								<Button variant="outline" onClick={toggleAll} size="sm">
-									{selected.size === importableProviders.length ? "Deselect all" : "Select all"}
+									{selected.size === importableProviders.length ? t("settings.ccSwitch.deselectAll") : t("settings.ccSwitch.selectAll")}
 								</Button>
 								<Button
 									variant="primary"
@@ -370,7 +370,7 @@ function CcSwitchPanel() {
 									disabled={selected.size === 0 || importing}
 									size="sm"
 								>
-									{importing ? "Importing…" : `Import ${selected.size} provider${selected.size !== 1 ? "s" : ""}`}
+									{importing ? t("settings.ccSwitch.importing") : t("settings.ccSwitch.importCount", { count: selected.size })}
 								</Button>
 							</div>
 
@@ -400,10 +400,10 @@ function CcSwitchPanel() {
 														{p.name}
 													</span>
 													<Badge tone="accent">{p.apiType}</Badge>
-													{p.isCurrent ? <Badge tone="success">current</Badge> : null}
+									{p.isCurrent ? <Badge tone="success">{t("settings.ccSwitch.current")}</Badge> : null}
 												</div>
 												<div className="mt-0.5 font-mono text-2xs text-ink-4">
-													{p.env.ANTHROPIC_BASE_URL || p.env.OPENAI_BASE_URL || "(default endpoint)"}
+									{p.env.ANTHROPIC_BASE_URL || p.env.OPENAI_BASE_URL || `(${t("settings.ccSwitch.defaultEndpoint")})`}
 												</div>
 												<div className="mt-0.5 font-mono text-2xs text-ink-4">
 													app: {p.appType}
@@ -418,7 +418,7 @@ function CcSwitchPanel() {
 							{unimportableProviders.length > 0 ? (
 								<div>
 									<div className="mb-1 font-mono text-2xs uppercase tracking-meta text-ink-4">
-										Skipped (unsupported format)
+										{t("settings.ccSwitch.skipped")}
 									</div>
 									<div className="flex flex-wrap gap-1">
 										{unimportableProviders.map((p) => (
@@ -434,14 +434,14 @@ function CcSwitchPanel() {
 
 			{!loading && !error && providers && importableProviders.length === 0 ? (
 				<div className="rounded border border-dashed border-line p-6 text-center text-xs text-ink-4">
-					No importable providers found in cc-switch database.
+					{t("settings.ccSwitch.noProviders")}
 				</div>
 			) : null}
 
 			{results ? (
 				<div className="flex flex-col gap-1.5">
 					<div className="font-mono text-2xs uppercase tracking-meta text-ink-3">
-						Import Results
+						{t("settings.ccSwitch.importResults")}
 					</div>
 							{results.map((r) => (
 								<div

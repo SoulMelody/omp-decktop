@@ -59,6 +59,32 @@ type _SetFn = (fn: (s: StoreState) => Partial<StoreState>) => void;
 
 let _batchQueue: _PendingEvent[] = [];
 let _batchRafId: number | null = null;
+let _batchTimerId: ReturnType<typeof setTimeout> | null = null;
+
+// Fallback flush interval. `requestAnimationFrame` is suspended while the tab
+// is hidden (background tab, minimized window), but WebSocket events keep
+// arriving — so a rAF-only flush would let `_batchQueue` accumulate the entire
+// stream and dump it in one burst on return. This timer guarantees a flush even
+// when rAF is paused. In the foreground rAF (~16 ms) always wins the race and
+// cancels the timer, so this adds zero extra renders there; backgrounded, the
+// browser throttles it to ~1 s, bounding the burst to ~1 s of content.
+const _BATCH_FALLBACK_MS = 100;
+
+function _cancelFlushTimers(): void {
+	if (_batchRafId !== null) {
+		if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(_batchRafId);
+		_batchRafId = null;
+	}
+	if (_batchTimerId !== null) {
+		clearTimeout(_batchTimerId);
+		_batchTimerId = null;
+	}
+}
+
+function _runFlush(set: _SetFn, get: () => StoreState): void {
+	_cancelFlushTimers();
+	_flushBatch(set, get);
+}
 
 function _enqueueSessionEvent(
 	sessionId: string,
@@ -67,11 +93,17 @@ function _enqueueSessionEvent(
 	get: () => StoreState,
 ): void {
 	_batchQueue.push({ sessionId, event });
-	if (_batchRafId === null) {
+	if (_batchRafId === null && typeof requestAnimationFrame === "function") {
 		_batchRafId = requestAnimationFrame(() => {
 			_batchRafId = null;
-			_flushBatch(set, get);
+			_runFlush(set, get);
 		});
+	}
+	if (_batchTimerId === null) {
+		_batchTimerId = setTimeout(() => {
+			_batchTimerId = null;
+			_runFlush(set, get);
+		}, _BATCH_FALLBACK_MS);
 	}
 }
 
@@ -84,9 +116,74 @@ function _flushBatch(set: _SetFn, get: () => StoreState): void {
 		for (const { sessionId, event } of events) {
 			const prev = sessionsById[sessionId];
 			if (!prev) continue;
-			sessionsById[sessionId] = applyEvent(prev, event);
+			const next = applyEvent(prev, event);
+			// The real lifecycle has taken over (typically `turn_start` →
+			// "streaming"); cancel the optimistic backstop so it can't later
+			// stomp a legitimately-running session back to idle.
+			if (prev.status === "preparing" && next.status !== "preparing") {
+				_clearPrepareTimer(sessionId);
+			}
+			sessionsById[sessionId] = next;
 		}
 		return { sessionsById };
+	});
+}
+
+// ─── Optimistic "preparing" status ───────────────────────────────────────────
+//
+// `sendPrompt` fires a frame over the WebSocket, but the UI only learns the
+// agent has started one network round-trip later, when the server echoes
+// `turn_start`. To close that perceptible gap we optimistically flip an idle
+// session to "preparing" the instant the user submits. The real `turn_start`
+// supersedes it (see `_flushBatch`); a backstop timer reverts to idle if no
+// event ever arrives (lost frame, or a server error before `turn_start`).
+
+const _PREPARE_BACKSTOP_MS = 30_000;
+const _prepareTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function _clearPrepareTimer(sessionId: string): void {
+	const t = _prepareTimers.get(sessionId);
+	if (t !== undefined) {
+		clearTimeout(t);
+		_prepareTimers.delete(sessionId);
+	}
+}
+
+function _armPrepareBackstop(sessionId: string, set: _SetFn, get: () => StoreState): void {
+	_clearPrepareTimer(sessionId);
+	_prepareTimers.set(
+		sessionId,
+		setTimeout(() => {
+			_prepareTimers.delete(sessionId);
+			const cur = get().sessionsById[sessionId];
+			if (!cur || cur.status !== "preparing") return;
+			set((s) => {
+				const c = s.sessionsById[sessionId];
+				if (!c || c.status !== "preparing") return {};
+				return { sessionsById: { ...s.sessionsById, [sessionId]: { ...c, status: "idle" } } };
+			});
+		}, _PREPARE_BACKSTOP_MS),
+	);
+}
+
+/**
+ * Revert every optimistically-"preparing" session to idle and cancel its
+ * backstop. Called when the socket drops: an in-flight prompt frame may have
+ * been lost, so the "preparing" indicator would otherwise hang forever.
+ */
+function _resetPreparingSessions(set: _SetFn): void {
+	set((s) => {
+		let changed = false;
+		const sessionsById = { ...s.sessionsById };
+		for (const id of Object.keys(sessionsById)) {
+			const sess = sessionsById[id];
+			if (sess && sess.status === "preparing") {
+				_clearPrepareTimer(id);
+				sessionsById[id] = { ...sess, status: "idle" };
+				changed = true;
+			}
+		}
+		return changed ? { sessionsById } : {};
 	});
 }
 
@@ -361,6 +458,10 @@ export const useStore = create<StoreState>()(
 			if (typeof document !== "undefined") {
 				document.addEventListener("visibilitychange", () => {
 					if (document.visibilityState !== "visible") return;
+					// rAF was suspended while hidden; drain any events that piled up
+					// so returning to the tab shows them at once, immediately, rather
+					// than waiting for the next throttled fallback tick.
+					_runFlush(set as _SetFn, get);
 					const ws = get().ws;
 					if (!ws) return;
 					// If the socket was closed while backgrounded, force reconnect.
@@ -393,7 +494,12 @@ export const useStore = create<StoreState>()(
 		connect() {
 			if (get().ws) return;
 			const ws = new WsClient();
-			ws.onStatus((status) => set({ wsStatus: status }));
+			ws.onStatus((status) => {
+				set({ wsStatus: status });
+				// A dropped/reconnecting socket may have lost an in-flight prompt
+				// frame; clear any optimistic "preparing" so it doesn't hang.
+				if (status !== "open") _resetPreparingSessions(set as _SetFn);
+			});
 			ws.subscribe((frame) => handleFrame(frame, set, get));
 			ws.connect();
 			set({ ws });
@@ -454,6 +560,21 @@ export const useStore = create<StoreState>()(
 				? { type: "prompt", sessionId: id, text, images }
 				: { type: "prompt", sessionId: id, text };
 			get().ws?.send(frame);
+
+			// Optimistic feedback: flip an idle session to "preparing" right away
+			// so the UI reacts without waiting for the server's `turn_start`. A
+			// busy session queues the prompt server-side instead (surfaced via
+			// `prompt_queued`), so leave its status untouched.
+			const session = get().sessionsById[id];
+			if (session && session.status === "idle") {
+				set((s) => ({
+					sessionsById: {
+						...s.sessionsById,
+						[id]: { ...session, status: "preparing", lastError: undefined },
+					},
+				}));
+				_armPrepareBackstop(id, set as _SetFn, get);
+			}
 		},
 
 		abort() {

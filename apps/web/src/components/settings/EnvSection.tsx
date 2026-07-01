@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RotateCcw, Save, X } from "lucide-react";
 import type { EnvEntry, ListEnvSettingsResponse } from "@omp-deck/protocol";
 
@@ -9,6 +10,7 @@ import { settingsApi } from "@/lib/settings-api";
 import { sourceLabel, sourceTone, envApplyBadge } from "@/components/settings/settings-helpers";
 
 export function EnvSection() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<ListEnvSettingsResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | undefined>();
@@ -59,21 +61,18 @@ export function EnvSection() {
 	return (
 		<div className="mx-auto max-w-6xl space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">Environment variables</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("settings.env.heading")}</h1>
 				<p className="mt-1 max-w-3xl text-sm text-ink-3">
-					Edits write to the deck-managed env file only. Variables from the launching process stay
-					higher priority until you remove them from that shell/profile.
+					{t("settings.env.intro")}
 				</p>
 			</div>
 
 			{data?.restartRequired ? (
 				<div className="flex items-center gap-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
-					<div className="min-w-0 flex-1">
-						Restart server to apply one or more restart-required values from the managed .env.
-					</div>
+					<div className="min-w-0 flex-1">{t("settings.env.restartHint")}</div>
 					<Button variant="outline" size="sm" onClick={() => void restart()}>
 						<RotateCcw className="h-3.5 w-3.5" />
-						Restart
+						{t("common.actions.restart")}
 					</Button>
 				</div>
 			) : null}
@@ -93,7 +92,7 @@ export function EnvSection() {
 				<div>envFile: {data?.envFilePath ?? "..."}</div>
 			</div>
 
-			{loading ? <div className="text-sm text-ink-3">Loading...</div> : null}
+			{loading ? <div className="text-sm text-ink-3">{t("common.status.loading")}</div> : null}
 			{data ? (
 				<>
 					<EnvTable title="omp-deck" entries={grouped.deck} onEdit={setEditing} />
@@ -123,6 +122,7 @@ export function EnvTable({
 	entries: EnvEntry[];
 	onEdit: (entry: EnvEntry) => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="overflow-hidden rounded-md border border-line bg-paper">
 			<div className="border-b border-line bg-paper-2 px-3 py-2">
@@ -145,7 +145,7 @@ export function EnvTable({
 						</div>
 						<div className="flex justify-end">
 							<Button variant="outline" size="sm" onClick={() => onEdit(entry)}>
-								Replace
+								{t("common.actions.replace")}
 							</Button>
 						</div>
 					</div>
@@ -164,6 +164,7 @@ export function EditEnvModal({
 	onClose: () => void;
 	onSaved: (next: ListEnvSettingsResponse) => void;
 }) {
+	const { t } = useTranslation();
 	const [value, setValue] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | undefined>();
@@ -193,34 +194,32 @@ export function EditEnvModal({
 		<Modal open={Boolean(entry)} onClose={onClose} widthClass="max-w-xl">
 			<div className="flex h-11 items-center gap-2 border-b border-line px-3">
 				<div className="min-w-0 flex-1">
-					<div className="truncate font-mono text-xs font-semibold text-ink">{entry.key}</div>
-					<div className="text-xs text-ink-3">Writes to managed .env only</div>
+					<div className="text-xs text-ink-3">{t("settings.env.writesTo")}</div>
 				</div>
-				<Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+				<Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common.actions.close")}>
 					<X className="h-4 w-4" />
 				</Button>
 			</div>
 			<div className="space-y-3 overflow-auto p-4">
 				<div className="flex flex-wrap gap-1.5">
 					<Badge tone={sourceTone(entry.source)}>{sourceLabel(entry.source)}</Badge>
-					{entry.sensitive ? <Badge tone="danger">secret</Badge> : null}
-					{entry.restartRequired ? <Badge tone="warn">restart required</Badge> : <Badge tone="success">hot apply</Badge>}
+					{entry.sensitive ? <Badge tone="danger">{t("settings.env.secret")}</Badge> : null}
+					{entry.restartRequired ? <Badge tone="warn">{t("settings.env.restartRequired")}</Badge> : <Badge tone="success">{t("settings.env.hotApply")}</Badge>}
 				</div>
 				<p className="text-sm text-ink-3">{entry.description}</p>
 				{entry.source === "process-env" ? (
 					<div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-						This key is currently supplied by the launching process. Replacing it here writes the
-						managed env file, but process env remains higher priority until removed upstream.
+						{t("settings.env.processEnv")}
 					</div>
 				) : null}
 				<label className="block">
-					<div className="meta mb-1">New value</div>
+					<div className="meta mb-1">{t("settings.env.newValue")}</div>
 					<input
 						className="field h-9 w-full px-2 font-mono text-sm"
 						type={entry.sensitive ? "password" : "text"}
 						value={value}
 						onChange={(e) => setValue(e.target.value)}
-						placeholder={entry.sensitive ? "Paste replacement value" : entry.defaultValue ?? "Unset"}
+						placeholder={entry.sensitive ? t("settings.env.pasteValue") : entry.defaultValue ?? t("settings.env.unset")}
 					/>
 				</label>
 				{entry.options ? (
@@ -234,15 +233,15 @@ export function EditEnvModal({
 			</div>
 			<div className="flex items-center justify-between gap-2 border-t border-line px-3 py-3">
 				<Button variant="danger" size="sm" disabled={saving} onClick={() => void save(null)}>
-					Unset
+					{t("common.actions.unset")}
 				</Button>
 				<div className="flex gap-2">
 					<Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-						Cancel
+						{t("common.actions.cancel")}
 					</Button>
 					<Button variant="primary" size="sm" onClick={() => void save(value)} disabled={saving}>
 						<Save className="h-3.5 w-3.5" />
-						Save
+						{t("common.actions.save")}
 					</Button>
 				</div>
 			</div>

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
 import { Play, RotateCcw, X } from "lucide-react";
 import type { NotificationLevel } from "@omp-deck/protocol";
@@ -17,6 +18,7 @@ import { notificationLevelTone, formatUptime } from "@/components/settings/setti
  * pulled from the heartbeat frame, and a tail of the in-app notification log.
  */
 export function NotificationsSection() {
+	const { t } = useTranslation();
 	const {
 		permission,
 		requestPermission,
@@ -47,10 +49,9 @@ export function NotificationsSection() {
 	return (
 		<div className="mx-auto max-w-3xl space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("settings.notifications.label")}</h1>
 				<p className="mt-1 text-sm text-ink-3">
-					Browser notifications and audio cues for routine failures, agent activity,
-					and other server-emitted events. Settings live in this browser only.
+					{t("settings.notifications.intro")}
 				</p>
 			</div>
 
@@ -97,30 +98,42 @@ function PermissionCard({
 	permission: ReturnType<typeof useNotificationPermission>["permission"];
 	onRequest: () => void;
 }) {
-	const tone =
-		permission === "granted"
-			? "success"
-			: permission === "denied"
-				? "danger"
-				: permission === "unsupported"
-					? "muted"
-					: "warn";
-	const label =
-		permission === "granted"
-			? "Granted"
-			: permission === "denied"
-				? "Denied"
-				: permission === "unsupported"
-					? "Unsupported"
-					: "Not requested";
+	const { t } = useTranslation();
+	const tone = (
+		(permission) => {
+			switch (permission) {
+				case "granted":
+					return "success";
+				case "denied":
+					return "danger";
+				case "unsupported":
+					return "muted";
+			}
+		}
+	)(permission);
+	const label = (
+		(permission) => {
+			switch (permission) {
+				case "granted":
+					return t("settings.notifications.granted");
+				case "denied":
+					return t("settings.notifications.denied");
+				case "unsupported":
+					return t("settings.notifications.unsupported");
+				default:
+					return t("settings.notifications.notRequested");
+
+			}
+		}
+	)(permission);
 
 	return (
 		<div className="rounded-md border border-line bg-paper-2 p-4">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="min-w-0">
-					<div className="meta">Browser permission</div>
+					<div className="meta">{t("settings.notifications.browserPermission")}</div>
 					<div className="mt-0.5 text-sm text-ink">
-						OS-level notifications when the deck tab is in the background.
+						{t("settings.notifications.permissionDetail")}
 					</div>
 				</div>
 				<Badge tone={tone}>{label}</Badge>
@@ -128,27 +141,24 @@ function PermissionCard({
 			<div className="mt-3 text-xs text-ink-3">
 				{permission === "default" ? (
 					<>
-						Permission has not been requested yet. The deck will only emit OS notifications
-						after you grant access.
+						{t("settings.notifications.permissionDetail")}
 					</>
 				) : permission === "granted" ? (
 					<>
-						OS notifications will fire for items the server marks important
-						(routine failures, long-running steps, agent task completions).
+						{t("settings.notifications.grantedDesc")}
 					</>
 				) : permission === "denied" ? (
 					<>
-						The browser is blocking notifications for this site. Re-enable from the site
-						settings — usually the lock icon next to the address bar — then reload.
+						{t("settings.notifications.blocked")}
 					</>
 				) : (
-					<>This browser doesn't expose the Notifications API.</>
+					<>{t("settings.notifications.noApi")}</>
 				)}
 			</div>
 			{permission === "default" ? (
 				<div className="mt-3">
 					<Button size="sm" variant="primary" onClick={onRequest}>
-						Enable browser notifications
+						{t("settings.notifications.enableBrowserNotifications")}
 					</Button>
 				</div>
 			) : null}
@@ -163,15 +173,15 @@ function AudioCard({
 	audioEnabled: boolean;
 	onToggle: (enabled: boolean) => void;
 }) {
+	const { t } = useTranslation();
 	const levels: NotificationLevel[] = ["info", "warn", "error", "critical"];
 	return (
 		<div className="rounded-md border border-line bg-paper-2 p-4">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="min-w-0">
-					<div className="meta">Audio cues</div>
+					<div className="meta">{t("settings.notifications.audioCues")}</div>
 					<div className="mt-0.5 text-sm text-ink">
-						Synthesized tones layered on top of OS notifications. Each level has
-						a distinct sequence — info is short, critical is loud.
+						{t("settings.notifications.audioIntro")}
 					</div>
 				</div>
 				<label className="flex items-center gap-2 text-xs text-ink-2">
@@ -180,7 +190,7 @@ function AudioCard({
 						checked={audioEnabled}
 						onChange={(e) => onToggle(e.target.checked)}
 					/>
-					<span>{audioEnabled ? "Enabled" : "Muted"}</span>
+					<span>{audioEnabled ? t("settings.notifications.audioEnabled") : t("settings.notifications.audioMuted")}</span>
 				</label>
 			</div>
 			<div className="mt-3 flex flex-wrap gap-2">
@@ -198,7 +208,7 @@ function AudioCard({
 				))}
 			</div>
 			{!audioEnabled ? (
-				<div className="mt-2 text-xs text-ink-3">Enable audio to preview tones.</div>
+				<div className="mt-2 text-xs text-ink-3">{t("settings.notifications.enableAudio")}</div>
 			) : null}
 		</div>
 	);
@@ -215,21 +225,22 @@ function BannerResetCard({
 }) {
 	// Banner only ever shows when permission is "default" AND not dismissed,
 	// so the reset is only meaningful in that combination.
+	const { t } = useTranslation();
 	const canReset = bannerDismissed && permission === "default";
 	return (
 		<div className="rounded-md border border-line bg-paper-2 p-4">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="min-w-0">
-					<div className="meta">Permission banner</div>
+					<div className="meta">{t("settings.notifications.permissionBanner")}</div>
 					<div className="mt-0.5 text-sm text-ink">
-						The top-of-page nudge that asks you to enable notifications.
+						{t("settings.notifications.bannerDesc")}
 					</div>
 					<div className="mt-1 text-xs text-ink-3">
 						{permission !== "default"
-							? "Banner is suppressed because permission is already decided."
+							? t("settings.notifications.bannerSuppressed")
 							: bannerDismissed
-								? "You dismissed the banner. Reset to bring it back."
-								: "Banner is currently visible."}
+								? t("settings.notifications.bannerDismissed")
+								: t("settings.notifications.bannerVisible")}
 					</div>
 				</div>
 				<Button
@@ -239,7 +250,7 @@ function BannerResetCard({
 					onClick={onReset}
 				>
 					<RotateCcw className="mr-1 h-3 w-3" />
-					Reset banner
+					{t("settings.notifications.resetBanner")}
 				</Button>
 			</div>
 		</div>
@@ -262,11 +273,12 @@ function ServerIdentityCard({
 		| null;
 	nowMs: number;
 }) {
+	const { t } = useTranslation();
 	if (!heartbeat) {
 		return (
 			<div className="rounded-md border border-line bg-paper-2 p-4 text-xs text-ink-3">
-				<div className="meta mb-1">Server identity</div>
-				Waiting for the first heartbeat…
+				<div className="meta mb-1">{t("settings.notifications.serverIdentity")}</div>
+				{t("settings.notifications.waitingHeartbeat")}
 			</div>
 		);
 	}
@@ -278,7 +290,7 @@ function ServerIdentityCard({
 	return (
 		<div className="rounded-md border border-line bg-paper-2 p-4">
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="meta">Server identity</div>
+				<div className="meta">{t("settings.notifications.serverIdentity")}</div>
 				<Badge tone={ageTone}>last heartbeat {ageLabel}</Badge>
 			</div>
 			<dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 font-mono text-xs text-ink-2">
@@ -304,18 +316,18 @@ function RecentNotificationsCard({
 	items: ReadonlyArray<NotificationItem>;
 	onDismiss: (id: string) => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="rounded-md border border-line bg-paper">
 			<div className="border-b border-line bg-paper-2 px-3 py-2">
-				<div className="meta">Recent activity</div>
+				<div className="meta">{t("settings.notifications.recentActivity")}</div>
 				<div className="mt-0.5 text-xs text-ink-3">
-					Latest server-emitted notifications. Capped at 50 in memory; this list
-					shows the freshest 20.
+					{t("settings.notifications.activityDesc")}
 				</div>
 			</div>
 			{items.length === 0 ? (
 				<div className="px-3 py-6 text-center text-xs text-ink-3">
-					No notifications yet.
+					{t("settings.notifications.noNotifications")}
 				</div>
 			) : (
 				<ul className="divide-y divide-line">
@@ -343,8 +355,8 @@ function RecentNotificationsCard({
 									size="sm"
 									variant="ghost"
 									onClick={() => onDismiss(item.id)}
-									aria-label="Dismiss"
-									title="Dismiss"
+									aria-label={t("common.actions.dismiss")}
+									title={t("common.actions.dismiss")}
 								>
 									<X className="h-3 w-3" />
 								</Button>

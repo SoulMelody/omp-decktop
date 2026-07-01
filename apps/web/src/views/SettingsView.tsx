@@ -1,5 +1,6 @@
 import { ModelRolesSection } from "@/components/settings/ModelRolesSection";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { Layout } from "@/components/Layout";
 import { EnvSection } from "@/components/settings/EnvSection";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 export function SettingsView() {
 	const [params, setParams] = useSearchParams();
+	const { t } = useTranslation();
 	const selected = normalizeSection(params.get("section"));
 
 	function setSection(section: SectionId): void {
@@ -28,8 +30,8 @@ export function SettingsView() {
 			main={
 				<div className="flex h-full min-h-0 flex-col">
 					<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-						<div className="meta">Settings</div>
-						<div className="text-xs text-ink-3">Configure this local deck instance</div>
+						<div className="meta">{t("settings.title")}</div>
+						<div className="text-xs text-ink-3">{t("settings.subtitle")}</div>
 					</div>
 					<div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] overflow-hidden">
 						<nav className="border-r border-line bg-paper-2/40 p-2">
@@ -74,19 +76,21 @@ export function SettingsView() {
 	);
 }
 
-function StubSection({ section }: { section: Exclude<SectionId, "env" | "messaging" | "appearance" | "notifications" | "modelRoles"> }) {
+function StubSection({ section }: { section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles"> }) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
+	const { t } = useTranslation();
 	return (
 		<div className="mx-auto max-w-3xl rounded-md border border-dashed border-line bg-paper-2 p-6">
 			<div className="meta">{spec.label}</div>
-			<h1 className="mt-2 text-xl font-semibold">Not built yet</h1>
-			<p className="mt-1 text-sm text-ink-3">This section is reserved so the settings layout is stable.</p>
+			<h1 className="mt-2 text-xl font-semibold">{t("settings.stub.heading")}</h1>
+			<p className="mt-1 text-sm text-ink-3">{t("settings.stub.body")}</p>
 		</div>
 	);
 }
 
 function SettingsSideRail() {
-	return <div className="p-3 text-xs text-ink-3">Settings</div>;
+	const { t } = useTranslation();
+	return <div className="p-3 text-xs text-ink-3">{t("settings.title")}</div>;
 }
 
 function SettingsInspector() {

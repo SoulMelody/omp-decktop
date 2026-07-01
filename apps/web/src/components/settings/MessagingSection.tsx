@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Play, RotateCcw, Square } from "lucide-react";
 import type { BridgeInfo, BridgeName, EnvEntry, ListEnvSettingsResponse } from "@omp-deck/protocol";
 
@@ -16,8 +17,8 @@ import {
 	formatUptime,
 } from "@/components/settings/settings-helpers";
 import { EnvTable, EditEnvModal } from "@/components/settings/EnvSection";
-
 export function MessagingSection() {
+	const { t } = useTranslation();
 	const [data, setData] = useState<ListEnvSettingsResponse | null>(null);
 	const [bridges, setBridges] = useState<BridgeInfo[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -64,10 +65,9 @@ export function MessagingSection() {
 	return (
 		<div className="mx-auto max-w-5xl space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">Messaging bridges</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("settings.messaging.heading")}</h1>
 				<p className="mt-1 max-w-3xl text-sm text-ink-3">
-					Save credentials, then start the bridge. The deck supervises the process; saving a
-					token alone does not bring the integration online.
+					{t("settings.messaging.intro")}
 				</p>
 			</div>
 
@@ -76,15 +76,14 @@ export function MessagingSection() {
 					{error}
 				</div>
 			) : null}
-			{loading ? <div className="text-sm text-ink-3">Loading...</div> : null}
-
+			{loading ? <div className="text-sm text-ink-3">{t("common.status.loading")}</div> : null}
 			<BridgeCard
 				title="Telegram"
 				description="DM-only long-poll bridge to local omp-deck."
 				info={telegramInfo}
 				credentialRows={[
-					{ label: "Bot token", entry: telegramToken },
-					{ label: "Allowed users", entry: telegramAllowed },
+					{ label: t("settings.messaging.botToken"), entry: telegramToken },
+					{ label: t("settings.messaging.allowedUsers"), entry: telegramAllowed },
 					{ label: "Mapping DB path", entry: telegramDb },
 				]}
 				onEdit={setEditing}
@@ -95,7 +94,7 @@ export function MessagingSection() {
 			<div className="rounded-md border border-dashed border-line bg-paper-2 p-4">
 				<div className="meta">Slack</div>
 				<p className="mt-1 text-sm text-ink-3">
-					Reserved for the same pattern: product-level setup here, shared managed-env storage underneath.
+					{t("settings.messaging.reserved")}
 				</p>
 			</div>
 
@@ -129,6 +128,7 @@ function BridgeCard({
 	onApplyBridge: (next: BridgeInfo) => void;
 	onError: (message: string | undefined) => void;
 }) {
+	const { t } = useTranslation();
 	const [busy, setBusy] = useState<"start" | "stop" | "restart" | undefined>();
 
 	async function run(action: "start" | "stop" | "restart", name: BridgeName): Promise<void> {
@@ -164,7 +164,7 @@ function BridgeCard({
 			<div className="space-y-3 p-3">
 				{missing.length > 0 ? (
 					<div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-						Missing required env: <span className="font-mono">{missing.join(", ")}</span>. Set
+						{t("settings.messaging.missingEnv")} <span className="font-mono">{missing.join(", ")}</span>. Set
 						these below before starting the bridge.
 					</div>
 				) : null}
@@ -181,7 +181,7 @@ function BridgeCard({
 						onClick={() => info && void run("start", info.name)}
 					>
 						<Play className="h-3.5 w-3.5" />
-						{busy === "start" ? "Starting..." : "Start"}
+						{busy === "start" ? "Starting..." : t("common.actions.start")}
 					</Button>
 					<Button
 						variant="outline"
@@ -190,7 +190,7 @@ function BridgeCard({
 						onClick={() => info && void run("stop", info.name)}
 					>
 						<Square className="h-3.5 w-3.5" />
-						{busy === "stop" ? "Stopping..." : "Stop"}
+						{busy === "stop" ? "Stopping..." : t("common.actions.stop")}
 					</Button>
 					<Button
 						variant="outline"
@@ -199,7 +199,7 @@ function BridgeCard({
 						onClick={() => info && void run("restart", info.name)}
 					>
 						<RotateCcw className="h-3.5 w-3.5" />
-						{busy === "restart" ? "Restarting..." : "Restart"}
+						{busy === "restart" ? "Restarting..." : t("common.actions.restart")}
 					</Button>
 					{info ? <BridgeMeta info={info} /> : null}
 				</div>
@@ -228,6 +228,7 @@ function BridgeMeta({ info }: { info: BridgeInfo }) {
 }
 
 function BridgeLogsPanel({ name }: { name: BridgeName }) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [lines, setLines] = useState<Array<{ stream: string; text: string; timestamp: string }>>([]);
 	const [fetching, setFetching] = useState(false);
@@ -261,13 +262,12 @@ function BridgeLogsPanel({ name }: { name: BridgeName }) {
 				className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-ink-2 hover:bg-paper-3"
 				onClick={() => setOpen((v) => !v)}
 			>
-				<span>Bridge logs</span>
 				<span className="font-mono text-2xs text-ink-3">{open ? "hide" : "show"}</span>
 			</button>
 			{open ? (
 				<div className="max-h-64 overflow-auto border-t border-line bg-paper p-2 font-mono text-2xs">
-					{fetching && lines.length === 0 ? <div className="text-ink-3">Loading...</div> : null}
-					{!fetching && lines.length === 0 ? <div className="text-ink-3">No log lines yet.</div> : null}
+					{fetching && lines.length === 0 ? <div className="text-ink-3">{t("common.status.loading")}</div> : null}
+					{!fetching && lines.length === 0 ? <div className="text-ink-3">{t("settings.messaging.noLogLines")}</div> : null}
 					{lines.map((line, idx) => (
 						<div
 							key={`${line.timestamp}-${idx}`}
@@ -291,6 +291,7 @@ function MessagingCredentialRow({
 	entry: EnvEntry | undefined;
 	onEdit: (entry: EnvEntry) => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="grid grid-cols-[160px_1fr_120px] items-center gap-3 px-3 py-2 text-sm">
 			<div>
@@ -306,7 +307,7 @@ function MessagingCredentialRow({
 			</div>
 			<div className="flex justify-end">
 				<Button variant="outline" size="sm" disabled={!entry} onClick={() => entry && onEdit(entry)}>
-					Replace
+					{t("common.actions.replace")}
 				</Button>
 			</div>
 		</div>

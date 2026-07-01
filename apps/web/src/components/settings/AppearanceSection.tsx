@@ -1,17 +1,18 @@
 import { Badge } from "@/components/ui/Badge";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { THEMES, useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function AppearanceSection() {
+	const { t } = useTranslation();
 	const theme = useTheme();
 	return (
 		<div className="mx-auto max-w-5xl space-y-4">
 			<div>
-				<h1 className="text-xl font-semibold tracking-tight">Appearance</h1>
+				<h1 className="text-xl font-semibold tracking-tight">{t("settings.appearance.heading")}</h1>
 				<p className="mt-1 max-w-3xl text-sm text-ink-3">
-					Themes swap the entire palette and font stack at runtime. Your choice is stored in this
-					browser; clearing it falls back to the system color preference.
+					{t("settings.appearance.intro")}
 				</p>
 			</div>
 
@@ -29,11 +30,11 @@ export function AppearanceSection() {
 
 			<div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-paper-2 px-3 py-2 text-sm">
 				<div className="min-w-0">
-					<div className="meta">System preference</div>
+					<div className="meta">{t("settings.appearance.systemPreference")}</div>
 					<div className="mt-0.5 text-xs text-ink-3">
 						{theme.usingSystem
-							? `Following the OS: ${theme.systemPreferred}.`
-							: `Pinned to ${theme.stored}. The OS currently prefers ${theme.systemPreferred}.`}
+							? t("settings.appearance.followingOS", { theme: theme.systemPreferred })
+							: t("settings.appearance.pinned", { theme: theme.stored, system: theme.systemPreferred })}
 					</div>
 				</div>
 				<Button
@@ -42,14 +43,14 @@ export function AppearanceSection() {
 					disabled={theme.usingSystem}
 					onClick={() => theme.clear()}
 				>
-					Match system
+					{t("settings.appearance.matchSystem")}
 				</Button>
 			</div>
 
 			<div className="overflow-hidden rounded-md border border-line bg-paper">
 				<div className="border-b border-line bg-paper-2 px-3 py-2">
-					<div className="meta">Font preview</div>
-					<div className="mt-0.5 text-xs text-ink-3">Driven by the active theme. v1 ships one font set.</div>
+					<div className="meta">{t("settings.appearance.fontPreview")}</div>
+					<div className="mt-0.5 text-xs text-ink-3">{t("settings.appearance.fontHint")}</div>
 				</div>
 				<div className="space-y-3 p-4">
 					<div>

@@ -47,8 +47,8 @@ export function localizeSettingsView(source: string): string {
 	let next = injectNamedImport(source, "@/i18n/useLocale", "useLocale");
 	next = injectNamedImport(next, "react-i18next", "useTranslation");
 
-	next = replaceOne(next, '<div className="meta">Settings</div>', SETTINGS_TOP_TITLE, "SettingsView: top title");
-	next = replaceOne(next, '<div className="text-xs text-ink-3">Configure this local deck instance</div>', SETTINGS_TOP_SUBTITLE, "SettingsView: top subtitle");
+	next = replaceOne(next, '<div className="meta">{t("settings.title")}</div>', SETTINGS_TOP_TITLE, "SettingsView: top title");
+	next = replaceOne(next, '<div className="text-xs text-ink-3">{t("settings.subtitle")}</div>', SETTINGS_TOP_SUBTITLE, "SettingsView: top subtitle");
 
 	// Replace the branch after NotificationsSection to inject LanguageSection.
 	next = replaceOne(
