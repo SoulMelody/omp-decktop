@@ -70,16 +70,32 @@ export const api = {
 		});
 	},
 	compactSession(id: string, focus?: string): Promise<{ ok: true }> {
-		const body = focus && focus.trim().length > 0 ? JSON.stringify({ focus: focus.trim() }) : "";
-		const init: RequestInit = { method: "POST" };
-		if (body) {
-			init.body = body;
-			init.headers = { "content-type": "application/json" };
-		}
+		const body = focus && focus.trim().length > 0 ? JSON.stringify({ focus: focus.trim() }) : undefined;
+		const init: RequestInit = body
+			? { method: "POST", body, headers: { "content-type": "application/json" } }
+			: { method: "POST" };
 		return request(`/sessions/${encodeURIComponent(id)}/compact`, init);
 	},
 	disposeSession(id: string): Promise<{ ok: true }> {
 		return request(`/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+	},
+	branchPoints(id: string): Promise<{ points: { entryId: string; text: string }[] }> {
+		return request(`/sessions/${encodeURIComponent(id)}/branch-points`);
+	},
+	forkSession(id: string): Promise<{ ok: true }> {
+		return request(`/sessions/${encodeURIComponent(id)}/fork`, { method: "POST" });
+	},
+	branchSession(id: string, entryId: string): Promise<{ ok: true; selectedText: string }> {
+		return request(`/sessions/${encodeURIComponent(id)}/branch`, {
+			method: "POST",
+			body: JSON.stringify({ entryId }),
+		});
+	},
+	rewindSession(id: string, entryId: string): Promise<{ ok: true; editorText?: string }> {
+		return request(`/sessions/${encodeURIComponent(id)}/rewind`, {
+			method: "POST",
+			body: JSON.stringify({ entryId }),
+		});
 	},
 	listSlashCommands(cwd?: string): Promise<ListSlashCommandsResponse> {
 		const q = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";

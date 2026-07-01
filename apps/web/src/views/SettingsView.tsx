@@ -6,9 +6,10 @@ import { Layout } from "@/components/Layout";
 import { EnvSection } from "@/components/settings/EnvSection";
 import { MessagingSection } from "@/components/settings/MessagingSection";
 import { OrientationSection } from "@/components/settings/OrientationSection";
-import { AppearanceSection } from "@/components/settings/AppearanceSection";
 import { NotificationsSection } from "@/components/settings/NotificationsSection";
 import { ProvidersSection } from "@/components/settings/ProvidersSection";
+import { EvalSection } from "@/components/settings/EvalSection";
+import { LspSection } from "@/components/settings/LspSection";
 import { SECTIONS, normalizeSection, type SectionId } from "@/components/settings/settings-helpers";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,10 @@ export function SettingsView() {
 								<NotificationsSection />
 							) : selected === "modelRoles" ? (
 								<ModelRolesSection />
+							) : selected === "lsp" ? (
+								<LspSection />
+							) : selected === "eval" ? (
+								<EvalSection />
 							) : (
 								<StubSection section={selected} />
 							)}
@@ -76,7 +81,11 @@ export function SettingsView() {
 	);
 }
 
-function StubSection({ section }: { section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles"> }) {
+function StubSection({
+	section,
+}: {
+	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles" | "lsp" | "eval">;
+}) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
 	const { t } = useTranslation();
 	return (

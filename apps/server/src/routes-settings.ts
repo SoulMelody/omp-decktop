@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import * as os from "node:os";
 import * as path from "node:path";
 import type {
+	AgentConfigEntry,
+	AgentConfigResponse,
 	EnvEntry,
 	EnvValueSource,
 	ListEnvSettingsResponse,
@@ -9,11 +11,20 @@ import type {
 	PatchEnvSettingsResponse,
 	RestartServerResponse,
 	RevealEnvValueResponse,
+	UpdateAgentConfigRequest,
+	ModelRoleEntry,
+	ModelRolesResponse,
+	ModelInfo,
+	UpdateModelRolesRequest,
 } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
 import { parseAutoStart, parseInt10, splitList } from "./config.ts";
+import { AGENT_CONFIG_SCHEMA, AGENT_CONFIG_KEYS, validateAgentConfigUpdate } from "./agent-config-schema.ts";
 import { ENV_SCHEMA, ENV_SCHEMA_BY_KEY, type EnvSchemaEntry, validateEnvValue } from "./env-schema.ts";
+import { settings as ompSettings } from "@oh-my-pi/pi-coding-agent";
+import { getAgentDir } from "@oh-my-pi/pi-utils";
+import type { AgentBridge } from "./bridge/types.ts";
 import {
 	MANAGED_ENV_KEYS_LOADED,
 	appendEnvAudit,
@@ -24,15 +35,6 @@ import {
 	writeManagedEnvUpdates,
 } from "./env-store.ts";
 import { setLogLevel } from "./log.ts";
-import { settings as ompSettings } from "@oh-my-pi/pi-coding-agent";
-import { getAgentDir } from "@oh-my-pi/pi-utils";
-import type { AgentBridge } from "./bridge/types.ts";
-import type {
-	ModelRoleEntry,
-	ModelRolesResponse,
-	ModelInfo,
-	UpdateModelRolesRequest,
-} from "@omp-deck/protocol";
 
 export function buildSettingsRouter(
 	bridge: AgentBridge,
@@ -188,9 +190,70 @@ export function buildSettingsRouter(
 		return c.json({ ok: true });
 	});
 
-	// DELETE /api/settings/model-roles — reset all
+	const AGENT_CONFIG_DESCRIPTIONS: Record<string, string> = {
+		"lsp.enabled": "Enable the LSP tool for code intelligence.",
+		"lsp.lazy": "Start language servers on first use instead of at startup.",
+		"lsp.formatOnWrite": "Format code files via LSP after writing.",
+		"lsp.diagnosticsOnWrite": "Return LSP diagnostics after writing code files.",
+		"lsp.diagnosticsOnEdit": "Return LSP diagnostics after editing code files.",
+		"lsp.diagnosticsDeduplicate": "Only surface new/changed post-edit diagnostics.",
+		"eval.py": "Allow Python cells to dispatch to the IPython kernel.",
+		"eval.js": "Allow JavaScript cells to dispatch to the in-process runtime.",
+		"eval.rb": "Allow Ruby cells to dispatch to a persistent Ruby kernel.",
+		"eval.jl": "Allow Julia cells to dispatch to a persistent Julia kernel.",
+		"python.kernelMode": "Keep the IPython kernel alive across eval calls, or start fresh each call.",
+		"python.interpreter": "Path to the Python executable; skips auto-discovery when set.",
+		"ruby.interpreter": "Path to the Ruby executable; skips auto-discovery when set.",
+		"julia.interpreter": "Path to the Julia executable; skips auto-discovery when set.",
+	};
+	app.get("/settings/agent-config", (c) => {
+		const entries: AgentConfigEntry[] = AGENT_CONFIG_KEYS.map((key) => {
+			const field = AGENT_CONFIG_SCHEMA[key]!;
+			const raw = ompSettings.get(key as never) as unknown;
+			const valueType = field.kind === "enum" ? "enum" : field.kind;
+			const value = field.kind === "boolean" ? Boolean(raw) : raw === undefined || raw === null ? null : String(raw);
+			const entry: AgentConfigEntry = {
+				key,
+				valueType,
+				value,
+				description: AGENT_CONFIG_DESCRIPTIONS[key] ?? "",
+			};
+			if (field.kind === "enum") entry.options = [...field.options];
+			return entry;
+		});
+		const configPath = path.join(getAgentDir(), "config.yml");
+		return c.json({ entries, configPath } satisfies AgentConfigResponse);
+	});
+
+	// PUT /api/settings/agent-config
+	app.put("/settings/agent-config", async (c) => {
+		let body: UpdateAgentConfigRequest;
+		try {
+			body = (await c.req.json()) as UpdateAgentConfigRequest;
+		} catch {
+			return c.json({ error: "invalid json body" }, 400);
+		}
+		const updates = body.updates ?? {};
+		for (const [key, value] of Object.entries(updates)) {
+			const field = AGENT_CONFIG_SCHEMA[key];
+			if (!field) return c.json({ error: `unknown agent-config key: ${key}` }, 400);
+			if (value === null && field.kind === "string") continue;
+			const err = validateAgentConfigUpdate(key, value);
+			if (err) return c.json({ error: err }, 400);
+		}
+		for (const [key, value] of Object.entries(updates)) {
+			const next = value === null ? "" : value;
+			ompSettings.set(key as never, next as never);
+		}
+		await ompSettings.flush();
+		return c.json({ ok: true });
+	});
+
 	app.delete("/settings/model-roles", async (c) => {
-		ompSettings.set("modelRoles", {});
+		if (!isLoopbackRequest(c.req.raw)) return c.json({ error: "model-role reset requires loopback" }, 403);
+		for (const role of Object.keys(ompSettings.getModelRoles())) {
+			ompSettings.setModelRole(role, "");
+		}
 		await ompSettings.flush();
 		return c.json({ ok: true });
 	});

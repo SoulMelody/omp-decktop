@@ -484,6 +484,19 @@ const zhCN = {
 			dismissNotification: "关闭通知",
 		},
 	},
+
+	chat: {
+		branch: {
+			fork: "将当前对话复制为新的会话文件",
+			branch: "从某条用户消息分叉为新的会话文件",
+			rewind: "在同一会话内回退到某条用户消息",
+			branchTitle: "从用户消息分叉",
+			rewindTitle: "回退到用户消息",
+			empty: "暂无用户消息 — 没有可分叉或回退到的节点。",
+			error: "无法加载分叉点",
+			forkError: "Fork 失败",
+		},
+	},
 } as const;
 
 export default zhCN;

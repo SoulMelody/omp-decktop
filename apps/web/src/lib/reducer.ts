@@ -103,6 +103,12 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 			};
 		}
 
+	case "session_replaced": {
+		const snap = (event as { snapshot?: SessionSnapshot }).snapshot;
+		if (!snap) return state;
+		return initSession(snap);
+	}
+
 		// ─── Messages ──────────────────────────────────────────────────────
 		case "message_start": {
 			const msg = (event as any).message;

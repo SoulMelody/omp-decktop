@@ -177,6 +177,62 @@ export function buildRouter(
 		}
 	});
 
+	app.get("/sessions/:id/branch-points", (c) => {
+		const handle = bridge.getSession(c.req.param("id"));
+		if (!handle) return c.json({ error: "session not found" }, 404);
+		return c.json({ points: handle.getBranchPoints() });
+	});
+
+	app.post("/sessions/:id/fork", async (c) => {
+		const handle = bridge.getSession(c.req.param("id"));
+		if (!handle) return c.json({ error: "session not found" }, 404);
+		try {
+			await handle.fork();
+			return c.json({ ok: true });
+		} catch (err) {
+			log.error(`fork failed`, err);
+			return c.json({ error: String((err as Error).message ?? err) }, 500);
+		}
+	});
+
+	app.post("/sessions/:id/branch", async (c) => {
+		const handle = bridge.getSession(c.req.param("id"));
+		if (!handle) return c.json({ error: "session not found" }, 404);
+		let body: { entryId?: string };
+		try {
+			body = (await c.req.json()) as { entryId?: string };
+		} catch {
+			return c.json({ error: "invalid json" }, 400);
+		}
+		if (!body.entryId) return c.json({ error: "entryId required" }, 400);
+		try {
+			const res = await handle.branch(body.entryId);
+			return c.json({ ok: true, selectedText: res.selectedText });
+		} catch (err) {
+			log.error(`branch failed`, err);
+			return c.json({ error: String((err as Error).message ?? err) }, 500);
+		}
+	});
+
+	app.post("/sessions/:id/rewind", async (c) => {
+		const handle = bridge.getSession(c.req.param("id"));
+		if (!handle) return c.json({ error: "session not found" }, 404);
+		let body: { entryId?: string };
+		try {
+			body = (await c.req.json()) as { entryId?: string };
+		} catch {
+			return c.json({ error: "invalid json" }, 400);
+		}
+		if (!body.entryId) return c.json({ error: "entryId required" }, 400);
+		try {
+			const res = await handle.rewind(body.entryId);
+			return c.json({ ok: true, editorText: res.editorText });
+		} catch (err) {
+			log.error(`rewind failed`, err);
+			return c.json({ error: String((err as Error).message ?? err) }, 500);
+		}
+	});
+
 	app.patch("/sessions/:id", async (c) => {
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);

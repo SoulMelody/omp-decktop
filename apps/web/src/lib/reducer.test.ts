@@ -223,3 +223,33 @@ describe("reducer queuedPrompts snapshot hydration", () => {
 		expect(s.queuedPrompts[1]?.behavior).toBe("steer");
 	});
 });
+
+describe("reducer session_replaced event", () => {
+	test("rebuilds state from carried snapshot while keeping session id stable", () => {
+		let s = fresh();
+		s = applyEvent(s, queueEvent("old queued", "q-old"));
+		s = applyEvent(s, userMessageStart("old message"));
+
+		const next = applyEvent(s, {
+			type: "session_replaced",
+			snapshot: {
+				sessionId: "s1",
+				cwd: "/tmp/x",
+				isStreaming: false,
+				messages: [{ role: "user", content: "new branch", timestamp: 1700000000001 }],
+				todoPhases: [{ name: "branch", tasks: [{ content: "do branch", status: "pending" }] }],
+			},
+		} as never);
+
+		expect(next.sessionId).toBe("s1");
+		expect(next.status).toBe("idle");
+		expect(next.queuedPrompts).toEqual([]);
+		expect(next.messages.map((m) => m.text)).toEqual(["new branch"]);
+		expect(next.todoPhases[0]?.name).toBe("branch");
+	});
+
+	test("ignores malformed replacement payloads", () => {
+		const s = fresh();
+		expect(applyEvent(s, { type: "session_replaced" } as never)).toBe(s);
+	});
+});
