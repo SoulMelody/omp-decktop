@@ -85,6 +85,20 @@ export function DapSection() {
 		}
 	}
 
+	const newAdapterDefaults: Record<string, unknown> = { command: "", languages: [], fileTypes: [], rootMarkers: [] };
+
+	function addAdapter(scope: "global" | "project") {
+		const name = window.prompt("Adapter name:");
+		if (!name) return;
+		if (scope === "global" && globalConfig) {
+			if (globalConfig.adapters[name]) { setError(`Adapter "${name}" already exists`); return; }
+			setGlobalConfig({ ...globalConfig, adapters: { ...globalConfig.adapters, [name]: { ...newAdapterDefaults } as unknown as DapAdapterConfig } });
+		} else if (scope === "project" && projectConfig) {
+			if (projectConfig.adapters[name]) { setError(`Adapter "${name}" already exists`); return; }
+			setProjectConfig({ ...projectConfig, adapters: { ...projectConfig.adapters, [name]: { ...newAdapterDefaults } as unknown as DapAdapterConfig } });
+		}
+	}
+
 	const adapterNames = (adapters: Record<string, unknown>) => Object.keys(adapters).sort();
 
 	return (
@@ -102,9 +116,14 @@ export function DapSection() {
 						<div className="font-mono text-xs font-medium uppercase tracking-meta">Global DAP</div>
 						<div className="text-xs text-ink-3">{globalConfig?.configPath ?? "..."}</div>
 					</div>
-					<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveGlobal()} disabled={saving === "global" || !globalConfig}>
-						{t("common.actions.save", "Save")}
-					</button>
+					<div className="flex items-center gap-2">
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => addAdapter("global")}>
+							+ Add
+						</button>
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveGlobal()} disabled={saving === "global" || !globalConfig}>
+							{t("common.actions.save", "Save")}
+						</button>
+					</div>
 				</div>
 				{globalConfig && adapterNames(globalConfig.adapters as Record<string, unknown>).map((name) => (
 					<ServerCard
@@ -125,9 +144,14 @@ export function DapSection() {
 						<div className="font-mono text-xs font-medium uppercase tracking-meta">Workspace DAP</div>
 						<div className="text-xs text-ink-3">{projectConfig?.projectConfigPath ?? "..."}</div>
 					</div>
-					<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveProject()} disabled={saving === "project" || !projectConfig}>
-						{t("common.actions.save", "Save")}
-					</button>
+					<div className="flex items-center gap-2">
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => addAdapter("project")}>
+							+ Add
+						</button>
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveProject()} disabled={saving === "project" || !projectConfig}>
+							{t("common.actions.save", "Save")}
+						</button>
+					</div>
 				</div>
 				<div className="text-xs text-ink-3">cwd: {projectConfig?.cwd ?? "..."} · merged: {projectConfig?.mergedFromProject ? "yes" : "no"}</div>
 				{projectConfig && adapterNames(projectConfig.adapters as Record<string, unknown>).map((name) => (
