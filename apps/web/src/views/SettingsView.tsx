@@ -1,3 +1,4 @@
+import { AppearanceSection } from "@/components/settings/AppearanceSection";
 import { ModelRolesSection } from "@/components/settings/ModelRolesSection";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -62,6 +63,8 @@ export function SettingsView() {
 								<MessagingSection />
 							) : selected === "orientation" ? (
 								<OrientationSection />
+							) : selected === "appearance" ? (
+								<AppearanceSection />
 							) : selected === "notifications" ? (
 								<NotificationsSection />
 							) : selected === "modelRoles" ? (
@@ -84,7 +87,7 @@ export function SettingsView() {
 function StubSection({
 	section,
 }: {
-	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles" | "lsp" | "dap">;
+	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "appearance" | "notifications" | "modelRoles" | "lsp" | "dap">;
 }) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
 	const { t } = useTranslation();

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCcw, Save, X } from "lucide-react";
+import { FolderPlus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import type { EnvEntry, ListEnvSettingsResponse } from "@omp-deck/protocol";
 
 import { Badge } from "@/components/ui/Badge";
@@ -91,6 +91,8 @@ export function EnvSection() {
 				<div>dataDir: {data?.dataDir ?? "..."}</div>
 				<div>envFile: {data?.envFilePath ?? "..."}</div>
 			</div>
+
+			{data ? <WorkspaceQuickCard data={data} onRefresh={() => void refresh()} onError={setError} /> : null}
 
 			{loading ? <div className="text-sm text-ink-3">{t("common.status.loading")}</div> : null}
 			{data ? (
@@ -246,5 +248,151 @@ export function EditEnvModal({
 				</div>
 			</div>
 		</Modal>
+	);
+}
+
+const WORKSPACES_KEY = "OMP_DECK_WORKSPACES";
+
+/**
+ * Quick-add/remove workspace paths without digging through the full env table.
+ * Reads/writes OMP_DECK_WORKSPACES via the same patchEnv path.
+ */
+function WorkspaceQuickCard({
+	data,
+	onRefresh,
+	onError,
+}: {
+	data: ListEnvSettingsResponse;
+	onRefresh: () => void;
+	onError: (msg: string | undefined) => void;
+}) {
+	const [adding, setAdding] = useState(false);
+	const [newPath, setNewPath] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const entry = data.entries.find((e) => e.key === WORKSPACES_KEY);
+	const raw = entry?.masked ?? "";
+	const paths = raw
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+
+	async function add(path: string): Promise<void> {
+		const trimmed = path.trim();
+		if (!trimmed) return;
+		if (paths.some((p) => p.toLowerCase() === trimmed.toLowerCase())) {
+			onError("This workspace path already exists.");
+			return;
+		}
+		setSaving(true);
+		onError(undefined);
+		try {
+			await settingsApi.patchEnv({ [WORKSPACES_KEY]: [...paths, trimmed].join(",") });
+			setNewPath("");
+			setAdding(false);
+			onRefresh();
+		} catch (e) {
+			onError(String(e));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function remove(idx: number): Promise<void> {
+		setSaving(true);
+		onError(undefined);
+		try {
+			const next = paths.filter((_, i) => i !== idx);
+			await settingsApi.patchEnv({ [WORKSPACES_KEY]: next.length > 0 ? next.join(",") : null });
+			onRefresh();
+		} catch (e) {
+			onError(String(e));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<div className="rounded-md border border-accent/20 bg-accent-soft/20 px-3 py-2.5">
+			<div className="flex items-center justify-between gap-2">
+				<div>
+					<div className="font-mono text-xs font-medium text-ink">
+						{WORKSPACES_KEY}
+					</div>
+					<div className="mt-0.5 text-xs text-ink-3">
+						Comma-separated workspace root paths. Changes take effect on next refresh.
+					</div>
+				</div>
+				<Button
+					size="sm"
+					variant="outline"
+					disabled={adding || saving}
+					onClick={() => setAdding(true)}
+				>
+					<FolderPlus className="h-3.5 w-3.5" />
+					Add
+				</Button>
+			</div>
+
+			{paths.length > 0 ? (
+				<div className="mt-2 flex flex-wrap gap-1.5">
+					{paths.map((p, i) => (
+						<span
+							key={`${p}-${i}`}
+							className="inline-flex items-center gap-1 rounded bg-paper border border-line px-2 py-0.5 font-mono text-xs text-ink-2"
+						>
+							<span className="max-w-[360px] truncate">{p}</span>
+							<button
+								type="button"
+								className="text-ink-4 hover:text-danger transition-colors"
+								disabled={saving}
+								onClick={() => void remove(i)}
+								aria-label={`Remove ${p}`}
+							>
+								<X className="h-3 w-3" />
+							</button>
+						</span>
+					))}
+				</div>
+			) : (
+				<div className="mt-2 font-mono text-xs text-ink-4">
+					(unset) — only the default workspace is active.
+				</div>
+			)}
+
+			{adding ? (
+				<div className="mt-2 flex gap-2">
+					<input
+						className="field h-8 flex-1 px-2 font-mono text-xs"
+						type="text"
+						value={newPath}
+						onChange={(e) => setNewPath(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") void add(newPath);
+							if (e.key === "Escape") {
+								setAdding(false);
+								setNewPath("");
+							}
+						}}
+						placeholder="C:\Users\you\projects\my-repo"
+						autoFocus
+					/>
+					<Button size="sm" variant="primary" disabled={saving || !newPath.trim()} onClick={() => void add(newPath)}>
+						Save
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						disabled={saving}
+						onClick={() => {
+							setAdding(false);
+							setNewPath("");
+						}}
+					>
+						Cancel
+					</Button>
+				</div>
+			) : null}
+		</div>
 	);
 }
