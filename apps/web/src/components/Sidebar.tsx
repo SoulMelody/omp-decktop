@@ -6,8 +6,10 @@ import type { SessionUi, UserMsg, AssistantMsg } from "@/lib/types";
 import { api } from "@/lib/api";
 
 export function Sidebar() {
+	const selectedCwd = useStore((s) => s.selectedWorkspaceCwd);
 	const workspaces = useStore((s) => s.workspaces);
 	const defaultCwd = useStore((s) => s.defaultCwd);
+	const setSelectedWorkspaceCwd = useStore((s) => s.setSelectedWorkspaceCwd);
 	const sessions = useStore((s) => s.sessions);
 	const activeId = useStore((s) => s.activeId);
 	const sessionsById = useStore((s) => s.sessionsById);
@@ -17,7 +19,7 @@ export function Sidebar() {
 	const selectSession = useStore((s) => s.selectSession);
 	const disposeSession = useStore((s) => s.disposeSession);
 
-	const [selectedCwd, setSelectedCwd] = useState<string | "">("");
+
 	const [creating, setCreating] = useState(false);
 
 	const cwdInUse = selectedCwd || defaultCwd;
@@ -92,7 +94,7 @@ export function Sidebar() {
 				<select
 					value={selectedCwd}
 					onChange={(e) => {
-						setSelectedCwd(e.target.value);
+						setSelectedWorkspaceCwd(e.target.value);
 						void refreshSessions(e.target.value || undefined);
 					}}
 					className="field h-7 w-full px-2 font-mono text-xs"

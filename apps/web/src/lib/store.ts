@@ -272,6 +272,10 @@ interface StoreState {
 
 	workspaces: WorkspaceEntry[];
 	defaultCwd: string;
+
+	/** The cwd the user selected in the sidebar workspace picker. Falls back to defaultCwd when empty. */
+	selectedWorkspaceCwd: string;
+	setSelectedWorkspaceCwd(cwd: string): void;
 	sessions: SessionSummary[];
 
 	activeId?: string;
@@ -421,6 +425,10 @@ export const useStore = create<StoreState>()(
 		wsStatus: "closed",
 		workspaces: [],
 		defaultCwd: "",
+		selectedWorkspaceCwd: "",
+		setSelectedWorkspaceCwd(cwd) {
+			set({ selectedWorkspaceCwd: cwd });
+		},
 		sessions: [],
 		sessionsById: {},
 		subscribed: new Set<string>(),

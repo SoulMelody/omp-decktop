@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useStore } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import type { LspConfigResponse, LspServerConfig, ProjectLspConfigResponse } from "@omp-deck/protocol";
 import { settingsApi } from "@/lib/settings-api";
@@ -18,9 +19,6 @@ const LSP_FIELDS: ServerCardField[] = [
 	{ key: "workspaceReadyTimings", label: "Workspace Ready Timings", type: "json", placeholder: "{}", advanced: true },
 ];
 
-function getCwd(): string {
-	return (globalThis as Record<string, unknown>).__OMP_DEFAULT_CWD__ as string ?? globalThis.location?.pathname ?? ".";
-}
 
 export function LspSection() {
 	const { t } = useTranslation();
@@ -29,7 +27,9 @@ export function LspSection() {
 	const [error, setError] = useState<string | undefined>();
 	const [saving, setSaving] = useState<"global" | "project" | undefined>();
 
-	const cwd = useMemo(() => getCwd(), []);
+	const selectedWorkspaceCwd = useStore((s) => s.selectedWorkspaceCwd);
+	const defaultCwd = useStore((s) => s.defaultCwd);
+	const cwd = selectedWorkspaceCwd || defaultCwd;
 
 	const refresh = useCallback(async () => {
 		try {

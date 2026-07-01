@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useStore } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import type { DapAdapterConfig, DapConfigResponse, ProjectDapConfigResponse } from "@omp-deck/protocol";
 import { settingsApi } from "@/lib/settings-api";
@@ -16,9 +17,6 @@ const DAP_FIELDS: ServerCardField[] = [
 	{ key: "attachDefaults", label: "Attach Defaults", type: "json", placeholder: "{}", advanced: true },
 ];
 
-function getCwd(): string {
-	return (globalThis as Record<string, unknown>).__OMP_DEFAULT_CWD__ as string ?? globalThis.location?.pathname ?? ".";
-}
 
 export function DapSection() {
 	const { t } = useTranslation();
@@ -27,7 +25,9 @@ export function DapSection() {
 	const [error, setError] = useState<string | undefined>();
 	const [saving, setSaving] = useState<"global" | "project" | undefined>();
 
-	const cwd = useMemo(() => getCwd(), []);
+	const selectedWorkspaceCwd = useStore((s) => s.selectedWorkspaceCwd);
+	const defaultCwd = useStore((s) => s.defaultCwd);
+	const cwd = selectedWorkspaceCwd || defaultCwd;
 
 	const refresh = useCallback(async () => {
 		try {
