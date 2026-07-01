@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { NavRail } from "./NavRail";
-import { FoldVertical, Menu, PanelRight, UnfoldVertical, X } from "lucide-react";
+import { FoldVertical, Menu, PanelRight, Terminal, UnfoldVertical, X } from "lucide-react";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,8 @@ export function Layout({ sidebar, main, inspector, topBar }: Props) {
 	const setSidebarOpen = useStore((s) => s.setSidebarOpen);
 	const inspectorOpen = useStore((s) => s.inspectorOpen);
 	const setInspectorOpen = useStore((s) => s.setInspectorOpen);
+	const terminalOpen = useStore((s) => s.terminalOpen);
+	const setTerminalOpen = useStore((s) => s.setTerminalOpen);
 
 	// Esc closes both overlays on small screens.
 	useEffect(() => {
@@ -55,6 +57,15 @@ export function Layout({ sidebar, main, inspector, topBar }: Props) {
 					<LocaleSwitcher />
 					<ConnectionIndicator />
 					<ToolCardsToggle />
+					<button
+						type="button"
+						className={cn("btn-ghost h-7 w-7 p-0", terminalOpen && "lg:bg-paper-3")}
+						onClick={() => setTerminalOpen(!terminalOpen)}
+						aria-label="Toggle terminal"
+						title="Toggle terminal"
+					>
+						<Terminal className="h-4 w-4" />
+					</button>
 					<button
 						type="button"
 						className={cn("btn-ghost h-7 w-7 p-0", inspectorOpen && "lg:bg-paper-3")}

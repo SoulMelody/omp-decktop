@@ -87,8 +87,10 @@ const en = {
 	layout: {
 		toggleSessions: "Toggle sessions",
 		toggleInspector: "Toggle inspector",
+		toggleTerminal: "Toggle terminal",
 		closePanels: "Close panels",
 		inspector: "Inspector",
+		terminal: "Terminal",
 		expandAllToolCards: "Expand all tool cards",
 		collapseAllToolCards: "Collapse all tool cards",
 	},

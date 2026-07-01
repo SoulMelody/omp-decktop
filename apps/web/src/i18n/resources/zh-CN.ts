@@ -74,8 +74,10 @@ const zhCN = {
 	layout: {
 		toggleSessions: "切换会话面板",
 		toggleInspector: "切换检查器",
+		toggleTerminal: "切换终端",
 		closePanels: "关闭面板",
 		inspector: "检查器",
+		terminal: "终端",
 		expandAllToolCards: "展开所有工具卡片",
 		collapseAllToolCards: "折叠所有工具卡片",
 	},

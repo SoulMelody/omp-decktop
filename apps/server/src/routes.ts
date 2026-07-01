@@ -34,6 +34,7 @@ import { buildOrientationRouter } from "./routes-orientation.ts";
 import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildCcSwitchRouter } from "./routes-ccswitch.ts";
+import { buildTerminalRouter } from "./routes-terminal.ts";
 import { buildAgentOutputRouter } from "./routes-agent-output.ts";
 import { buildFsReadRouter } from "./routes-fs-read.ts";
 import { mcpApp } from "./routes-mcp.ts";
@@ -314,6 +315,7 @@ app.route("/", buildFsReadRouter());
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/ccswitch", buildCcSwitchRouter());
 	app.route("/mcp", mcpApp);
+	app.route("/", buildTerminalRouter());
 
 	return app;
 }

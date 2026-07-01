@@ -3,6 +3,7 @@ import type { ClientFrame, ServerFrame } from "@omp-deck/protocol";
 
 import type { AgentBridge } from "./bridge/types.ts";
 import { broadcastBus } from "./broadcast-bus.ts";
+import { terminalService } from "./terminal-service.ts";
 import { logger } from "./log.ts";
 import { getBuildInfo, getUptimeSecs } from "./build-info.ts";
 const log = logger("ws");
@@ -66,6 +67,7 @@ export class WsHub {
 
 	onOpen(ws: ServerWebSocket<ConnectionData>): void {
 		this.connections.add(ws);
+		terminalService.sendState(ws);
 		send(ws, { type: "hello", connectionId: ws.data.connectionId });
 		log.debug(`open ${ws.data.connectionId}`);
 	}
@@ -122,6 +124,28 @@ export class WsHub {
 
 			case "plan_response":
 				await this.handlePlanResponse(ws, frame);
+				return;
+
+			case "terminal_open": {
+				const ok = terminalService.start();
+				if (ok) {
+					broadcastBus.broadcast({ type: "terminal_open" });
+				} else {
+					send(ws, { type: "error", error: "terminal: no PTY library available" });
+				}
+				return;
+			}
+
+			case "terminal_data":
+				terminalService.write(frame.data);
+				return;
+
+			case "terminal_resize":
+				terminalService.resize(frame.cols, frame.rows);
+				return;
+
+			case "terminal_close":
+				terminalService.kill();
 				return;
 
 			default:

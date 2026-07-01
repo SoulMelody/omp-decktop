@@ -1,4 +1,4 @@
-import { BookOpen, Clock, FolderOpen, Inbox, KanbanSquare, MessagesSquare, Plug, Settings, Sparkles, Store } from "lucide-react";
+import { BookOpen, Clock, FolderOpen, Inbox, KanbanSquare, MessagesSquare, Plug, Settings, Sparkles, Store, Terminal } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 

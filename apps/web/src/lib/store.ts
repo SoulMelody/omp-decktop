@@ -369,6 +369,10 @@ interface StoreState {
 	sidebarOpen: boolean;
 	inspectorOpen: boolean;
 
+	/** Terminal panel state. `terminalReady` is true when the server has a PTY running. */
+	terminalOpen: boolean;
+	terminalReady: boolean;
+
 	/**
 	 * Monotonic counter bumped every time the server broadcasts a `tasks_changed`
 	 * frame (any kanban mutation, whether triggered by the deck UI, a deck slash
@@ -453,6 +457,7 @@ interface StoreState {
 	setPendingDraft(draft: { text: string } | undefined): void;
 	setSidebarOpen(open: boolean): void;
 	setInspectorOpen(open: boolean): void;
+	setTerminalOpen(open: boolean): void;
 	/** Send a dialog response over the WS and clear it locally. */
 	respondToExtUiDialog(sessionId: string, dialogId: string, response: ExtUiDialogResponse): void;
 	/**
@@ -507,6 +512,8 @@ export const useStore = create<StoreState>()(
 		// panels are overlay drawers and always start closed.
 		sidebarOpen: readChromeOpen("omp-deck:sidebar-open", true),
 		inspectorOpen: readChromeOpen("omp-deck:inspector-open", false),
+		terminalOpen: false,
+		terminalReady: false,
 
 		async bootstrap() {
 			get().connect();
@@ -791,6 +798,16 @@ export const useStore = create<StoreState>()(
 			set({ inspectorOpen: open });
 		},
 
+		setTerminalOpen(open) {
+			// Send terminal_open when opening, terminal_close when closing
+			if (open) {
+				get().ws?.send({ type: "terminal_open" });
+			} else {
+				get().ws?.send({ type: "terminal_close" });
+			}
+			set({ terminalOpen: open });
+		},
+
 		respondToExtUiDialog(sessionId, dialogId, response) {
 			// Clear local state first — the dialog modal closes immediately —
 			// then send the response over the WS so the SDK call settles.
@@ -1072,6 +1089,19 @@ function handleFrame(
 			});
 			return;
 
+
+		case "terminal_open":
+			set({ terminalReady: true });
+			return;
+
+		case "terminal_close":
+			set({ terminalReady: false });
+			return;
+
+		case "terminal_data":
+			// Terminal data frames are consumed by the TerminalPanel component via
+			// ws.subscribe directly; store doesn't buffer them.
+			return;
 		case "pong":
 		default:
 			return;

@@ -1012,7 +1012,13 @@ export type ClientFrame =
 			proposalId: string;
 			approved: boolean;
 			editedContent?: string;
-	  };
+	  }
+	// ── Terminal frames ───────────────────────────────────────────────────
+	| { type: "terminal_open" }
+	| { type: "terminal_data"; data: string }
+	| { type: "terminal_resize"; cols: number; rows: number }
+	| { type: "terminal_close" }
+	;
 
 /** Server → Client. */
 export type ServerFrame =
@@ -1022,6 +1028,11 @@ export type ServerFrame =
 	| { type: "unsubscribed"; sessionId: string }
 	| { type: "session_event"; sessionId: string; event: AgentSessionEventJson }
 	| { type: "session_disposed"; sessionId: string }
+	// ── Terminal frames ───────────────────────────────────────────────────
+	| { type: "terminal_open" }
+	| { type: "terminal_data"; data: string }
+	| { type: "terminal_resize"; cols: number; rows: number }
+	| { type: "terminal_close" }
 	/** Broadcast frame: any kanban-task mutation occurred. Clients refetch. */
 	| { type: "tasks_changed" }
 	/** Broadcast frame: skill catalog or enabled-state changed. Clients refetch. */
@@ -1215,6 +1226,12 @@ export type ServerFrame =
 			actionUrl?: string;
 			timestamp: string;
 	  }
+
+	// ── Terminal frames ───────────────────────────────────────────────────
+	| { type: "terminal_open" }
+	| { type: "terminal_data"; data: string }
+	| { type: "terminal_resize"; cols: number; rows: number }
+	| { type: "terminal_close" }
 	| { type: "error"; sessionId?: string; error: string };
 
 /** Severity for a deck notification. Drives the audio tone + visual styling. */
