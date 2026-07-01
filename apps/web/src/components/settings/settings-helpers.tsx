@@ -12,7 +12,6 @@ export const SECTIONS = [
 	{ id: "notifications", label: "Notifications", description: "Idle alerts and quiet hours" },
 	{ id: "modelRoles", label: "Model Roles", description: "Role-specific model routing" },
 	{ id: "lsp", label: "LSP", description: "Language servers and diagnostics" },
-	{ id: "eval", label: "Eval", description: "Code interpreter kernels" },
 	{ id: "about", label: "About", description: "Version, paths, diagnostics" },
 ] as const;
 

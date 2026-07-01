@@ -190,22 +190,14 @@ export function buildSettingsRouter(
 		return c.json({ ok: true });
 	});
 
-	const AGENT_CONFIG_DESCRIPTIONS: Record<string, string> = {
-		"lsp.enabled": "Enable the LSP tool for code intelligence.",
-		"lsp.lazy": "Start language servers on first use instead of at startup.",
-		"lsp.formatOnWrite": "Format code files via LSP after writing.",
-		"lsp.diagnosticsOnWrite": "Return LSP diagnostics after writing code files.",
-		"lsp.diagnosticsOnEdit": "Return LSP diagnostics after editing code files.",
-		"lsp.diagnosticsDeduplicate": "Only surface new/changed post-edit diagnostics.",
-		"eval.py": "Allow Python cells to dispatch to the IPython kernel.",
-		"eval.js": "Allow JavaScript cells to dispatch to the in-process runtime.",
-		"eval.rb": "Allow Ruby cells to dispatch to a persistent Ruby kernel.",
-		"eval.jl": "Allow Julia cells to dispatch to a persistent Julia kernel.",
-		"python.kernelMode": "Keep the IPython kernel alive across eval calls, or start fresh each call.",
-		"python.interpreter": "Path to the Python executable; skips auto-discovery when set.",
-		"ruby.interpreter": "Path to the Ruby executable; skips auto-discovery when set.",
-		"julia.interpreter": "Path to the Julia executable; skips auto-discovery when set.",
-	};
+const AGENT_CONFIG_DESCRIPTIONS: Record<string, string> = {
+	"lsp.enabled": "Enable the LSP tool for code intelligence.",
+	"lsp.lazy": "Start language servers on first use instead of at startup.",
+	"lsp.formatOnWrite": "Format code files via LSP after writing.",
+	"lsp.diagnosticsOnWrite": "Return LSP diagnostics after writing code files.",
+	"lsp.diagnosticsOnEdit": "Return LSP diagnostics after editing code files.",
+	"lsp.diagnosticsDeduplicate": "Only surface new/changed post-edit diagnostics.",
+};
 	app.get("/settings/agent-config", (c) => {
 		const entries: AgentConfigEntry[] = AGENT_CONFIG_KEYS.map((key) => {
 			const field = AGENT_CONFIG_SCHEMA[key]!;
