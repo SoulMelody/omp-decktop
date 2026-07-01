@@ -13,13 +13,13 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@oh-my-pi/pi-ai": "16.2.9",
-		"@oh-my-pi/pi-coding-agent": "16.2.9",
-		"@oh-my-pi/pi-utils": "16.2.9",
+		"@oh-my-pi/pi-ai": "16.2.13",
+		"@oh-my-pi/pi-coding-agent": "16.2.13",
+		"@oh-my-pi/pi-utils": "16.2.13",
 		"@omp-deck/protocol": "workspace:*",
 		"croner": "^10.0.1",
 		"hono": "^4.12.27",
-		"quickjs-emscripten": "^0.31.0",
+		"quickjs-emscripten": "^0.32.0",
 		"yaml": "^2.9.0"
 	},
 	"devDependencies": {

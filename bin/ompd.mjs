@@ -117,8 +117,8 @@ function main() {
 	});
 	children.push(l10nWatch);
 
-	// ── Vite dev server with i18n config (port 5174, HMR) ─────────────────
-	const vite = spawn("bun", ["run", "vite", "--config", "vite.i18n.config.ts"], {
+	// ── Vite dev server (port 5173, HMR) ─────────────────
+	const vite = spawn("bun", ["run", "vite"], {
 		stdio: "inherit",
 		env,
 		cwd: WEB_DIR,

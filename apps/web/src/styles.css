@@ -1,3 +1,5 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 /* Font system — IBM Plex Sans for body, IBM Plex Mono for chrome / data / code. */
 @import "@fontsource/ibm-plex-sans/400.css";
 @import "@fontsource/ibm-plex-sans/500.css";
@@ -9,10 +11,6 @@
 /* Light-theme code highlighting baseline. Slate theme overrides token colors
    below via `[data-theme="slate"] .hljs-…` blocks. */
 @import "highlight.js/styles/atom-one-light.css";
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* ─── Themes ────────────────────────────────────────────────────────────────
    Tokens are space-separated R G B triplets so Tailwind's `<alpha-value>`
@@ -226,6 +224,12 @@
 	}
 }
 
+@utility btn {
+	@apply inline-flex items-center justify-center gap-1.5 rounded-md font-medium
+		transition-colors focus:outline-none focus-visible:ring-1
+		focus-visible:ring-ink/30 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
 @layer components {
 	/* Field — light input that doesn't shout. */
 	.field {
@@ -250,11 +254,6 @@
 	}
 
 	/* Buttons — flat, single-accent. */
-	.btn {
-		@apply inline-flex items-center justify-center gap-1.5 rounded-md font-medium
-			transition-colors focus:outline-none focus-visible:ring-1
-			focus-visible:ring-ink/30 disabled:cursor-not-allowed disabled:opacity-50;
-	}
 	.btn-primary {
 		@apply btn bg-ink text-paper-2 hover:bg-ink-2;
 	}

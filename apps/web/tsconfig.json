@@ -15,11 +15,10 @@
     "useDefineForClassFields": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "vite.config.ts", "vite.i18n.config.ts"],
+  "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
