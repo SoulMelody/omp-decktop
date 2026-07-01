@@ -2,6 +2,13 @@ import type { ReactNode } from "react";
 import { cn, truncate } from "@/lib/utils";
 import { CopyButton } from "@/lib/CopyButton";
 
+/** Split "src/foo.ts:50-200" into { file: "src/foo.ts", range: "50-200" }. */
+export function splitPathRange(raw: string): { file: string; range?: string } {
+	const m = /^(.+?):(\d[\d,:;+\-]*)$/.exec(raw);
+	if (!m) return { file: raw };
+	return { file: m[1]!, range: m[2]! };
+}
+
 export function extractResultText(result: unknown): string {
 	if (result == null) return "";
 	if (typeof result === "string") return result;

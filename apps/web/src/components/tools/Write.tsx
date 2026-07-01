@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ToolRendererProps } from "./ToolCallCard";
-import { ArgRow, extractResultText, SectionLabel } from "./shared";
+import { ArgRow, extractResultText, SectionLabel, splitPathRange } from "./shared";
 import { CodeBlock, detectLangFromPath } from "@/lib/code";
 import { useStore } from "@/lib/store";
 import { formatBytes, shortPath } from "@/lib/utils";
@@ -9,13 +9,14 @@ export function WriteTool({ args, stream, sessionId }: ToolRendererProps) {
 	const cwd = useStore(
 		(s) => s.sessionsById[sessionId ?? ""]?.cwd ?? s.defaultCwd,
 	);
-	const path = String((args.path as string | undefined) ?? "");
+	const rawPath = String((args.path as string | undefined) ?? "");
+	const { file } = splitPathRange(rawPath);
 	const content = String((args.content as string | undefined) ?? "");
 	const bytes = new Blob([content]).size;
 	const result = stream?.result;
 	const resultText = result ? extractResultText(result) : "";
 	const lineCount = content.split(/\r?\n/).length;
-	const language = detectLangFromPath(path);
+	const language = detectLangFromPath(file);
 
 	return (
 		<div className="space-y-1.5">
@@ -23,10 +24,10 @@ export function WriteTool({ args, stream, sessionId }: ToolRendererProps) {
 				k="path"
 				v={
 					<Link
-						to={`/files?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}`}
+						to={`/files?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(file)}`}
 						className="font-mono text-2xs text-ink-3 underline decoration-dotted underline-offset-2 hover:text-accent hover:decoration-solid"
 					>
-						{shortPath(path, 72)}
+						{shortPath(rawPath, 72)}
 					</Link>
 				}
 			/>
