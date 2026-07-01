@@ -229,8 +229,7 @@ function normalizeServers(servers: Record<string, unknown> | undefined) {
 }
 
 async function loadGlobalLsp(cwd: string): Promise<LspConfigResponse> {
-	// @ts-expect-error SDK deep-import for loadConfig (not re-exported from public API yet).
-	const { loadConfig: loadLspConfig } = await import("@oh-my-pi/pi-coding-agent/src/lsp/config");
+	const { loadConfig: loadLspConfig } = await import("@oh-my-pi/pi-coding-agent/lsp/config");
 	const config = loadLspConfig(cwd);
 	return {
 		...getLspScopePaths(cwd),
