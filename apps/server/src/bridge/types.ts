@@ -99,9 +99,13 @@ export interface SessionHandle {
 
 	subscribe(listener: EventListener): () => void;
 	snapshot(): SessionSnapshot;
+	fork(): Promise<void>;
+	branch(entryId: string): Promise<{ selectedText: string }>;
+	rewind(entryId: string): Promise<{ editorText?: string }>;
+	getBranchPoints(): Array<{ entryId: string; text: string }>;
 	prompt(
 		text: string,
-		opts?: { streamingBehavior?: "steer" | "followUp"; images?: ImageAttachment[] },
+		opts?: { streamingBehavior?: "steer" | "followUp"; images?: import("@omp-deck/protocol").ImageAttachment[] },
 	): Promise<void>;
 	/** True iff a turn is currently in-flight. Used by the WS layer to decide
 	 *  whether a freshly-arrived prompt is being queued vs. running immediately. */
@@ -166,7 +170,6 @@ export interface SessionHandle {
 	 * underlying model has no declared context window.
 	 */
 	getContextUsage(): ContextUsage | undefined;
-	dispose(): Promise<void>;
 	/** Idempotent enter/exit. No-op when state already matches. */
 	setPlanMode(enabled: boolean): Promise<void>;
 	/** Read the bridge's plan-mode context for snapshot replay. */
@@ -182,6 +185,7 @@ export interface SessionHandle {
 		proposalId: string,
 		response: PlanApprovalResponse,
 	): Promise<"settled" | "unknown">;
+	dispose(): Promise<void>;
 }
 
 export type SlashDispatchResult =

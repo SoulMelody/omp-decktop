@@ -104,7 +104,6 @@ const en = {
 		refreshSessions: "Refresh sessions",
 	},
 
-	// ── Settings ────────────────────────────────────────────────────────
 	settings: {
 		title: "Settings",
 		subtitle: "Configure this local deck instance",
@@ -117,6 +116,9 @@ const en = {
 			language: { label: "Language", description: "UI display language" },
 			workspaces: { label: "Workspaces", description: "Pinned roots and display names" },
 			notifications: { label: "Notifications", description: "Idle alerts and quiet hours" },
+			modelRoles: { label: "Model Roles", description: "Role-specific model routing" },
+			lsp: { label: "LSP", description: "Language servers and diagnostics" },
+			eval: { label: "Eval", description: "Code interpreter kernels" },
 			about: { label: "About", description: "Version, paths, diagnostics" },
 		},
 		notes: {
@@ -312,6 +314,17 @@ const en = {
 			sdkDefault: "SDK default",
 			inheritsDefault: "Inherits Default",
 			clear: "Clear",
+		},
+		lsp: {
+			heading: "LSP",
+			intro: "Language-server integration for code intelligence. Writes to the omp config.yml.",
+		},
+		eval: {
+			heading: "Eval kernels",
+			intro: "Code interpreter languages and Python kernel mode. Writes to the omp config.yml.",
+			kernelMode: "Python kernel mode",
+			interpreterPlaceholder: "auto-detect",
+			idleHint: "Idle kernel reaping is controlled by OMP_DECK_IDLE_TIMEOUT_MS in Env settings.",
 		},
 		restart: "Restart",
 		reload: "Reload",
@@ -517,6 +530,19 @@ const en = {
 		toast: {
 			view: "View",
 			dismissNotification: "Dismiss notification",
+		},
+	},
+
+	chat: {
+		branch: {
+			fork: "Fork current conversation into a new session file",
+			branch: "Branch from a user message into a new session file",
+			rewind: "Rewind to a user message within the same session",
+			branchTitle: "Branch from a user message",
+			rewindTitle: "Rewind to a user message",
+			empty: "No user messages yet — nothing to branch or rewind to.",
+			error: "Couldn't load branch points",
+			forkError: "Fork failed",
 		},
 	},
 } as const;

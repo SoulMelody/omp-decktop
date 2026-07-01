@@ -1,10 +1,12 @@
 import type {
+	AgentConfigResponse,
 	ListEnvSettingsResponse,
 	ModelRolesResponse,
 	PatchEnvSettingsRequest,
 	PatchEnvSettingsResponse,
 	RestartServerResponse,
 	RevealEnvValueResponse,
+	UpdateAgentConfigRequest,
 	UpdateModelRolesRequest,
 } from "@omp-deck/protocol";
 
@@ -37,6 +39,15 @@ export const settingsApi = {
 	},
 	restartServer(): Promise<RestartServerResponse> {
 		return req<RestartServerResponse>("/server/restart", { method: "POST" });
+	},
+	getAgentConfig(): Promise<AgentConfigResponse> {
+		return req<AgentConfigResponse>("/settings/agent-config");
+	},
+	updateAgentConfig(updates: UpdateAgentConfigRequest["updates"]): Promise<{ ok: true }> {
+		return req<{ ok: true }>("/settings/agent-config", {
+			method: "PUT",
+			body: JSON.stringify({ updates } satisfies UpdateAgentConfigRequest),
+		});
 	},
 	modelRoles: {
 		list(): Promise<ModelRolesResponse> {

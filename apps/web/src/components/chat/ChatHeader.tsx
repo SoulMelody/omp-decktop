@@ -3,9 +3,9 @@ import { ChevronDown, Plus } from "lucide-react";
 import type { SessionUi } from "@/lib/types";
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
+import { BranchMenu } from "./BranchMenu";
 import { ContextIndicator } from "./ContextIndicator";
 import { ModelPickerModal } from "./ModelPickerModal";
-
 /**
  * Sticky header row above the chat scroll area when a session is selected.
  * Shows the session name (click to rename) + a small dropdown listing other
@@ -175,16 +175,17 @@ function Inner({ session }: { session: SessionUi }) {
 					Plan
 				</span>
 			) : null}
-
 			{/* Context-window indicator — clickable popover with manual /compact. */}
 			<ContextIndicator sessionId={session.sessionId} usage={session.contextUsage} />
+
+			{/* Fork / Branch / Rewind affordances — server-side session operations. */}
+			<BranchMenu sessionId={session.sessionId} />
 
 			{/* Switcher dropdown */}
 			<div className="relative" ref={switcherRef}>
 				<button
 					type="button"
 					onClick={() => setSwitcherOpen((v) => !v)}
-					className="btn-ghost h-7 gap-1 px-1.5 text-xs"
 					title="Switch sessions"
 				>
 					Switch

@@ -282,6 +282,45 @@ export interface UpdateModelRolesRequest {
 	roles: Record<string, string | null>;
 }
 
+/** A single agent-config (config.yml) field surfaced in deck settings. */
+export interface AgentConfigEntry {
+	key: string;
+	valueType: "boolean" | "string" | "enum";
+	value: boolean | string | null;
+	options?: string[];
+	description: string;
+}
+
+export interface AgentConfigResponse {
+	entries: AgentConfigEntry[];
+	/** Absolute path to the config.yml these write to (for the UI footer). */
+	configPath: string;
+}
+
+export interface UpdateAgentConfigRequest {
+	/** key → value; value null/"" on a string field clears it. */
+	updates: Record<string, boolean | string | null>;
+}
+
+export interface SessionBranchPoint {
+	entryId: string;
+	text: string;
+}
+
+export interface SessionBranchPointsResponse {
+	points: SessionBranchPoint[];
+}
+
+export interface SessionBranchResponse {
+	ok: true;
+	selectedText: string;
+}
+
+export interface SessionRewindResponse {
+	ok: true;
+	editorText?: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Onboarding (first-run wizard)
 // ─────────────────────────────────────────────────────────────────────────────

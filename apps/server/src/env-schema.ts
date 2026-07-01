@@ -141,6 +141,14 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		description: "Disable SDK automatic title generation when set truthy.",
 	},
 	{
+		key: "PI_DISABLE_LSPMUX",
+		valueType: "boolean",
+		sensitive: false,
+		restartRequired: true,
+		hotApply: false,
+		description: "Disable lspmux multiplexing for LSP servers when set truthy.",
+	},
+	{
 		key: "OMP_MODEL",
 		valueType: "string",
 		sensitive: false,

@@ -26,6 +26,14 @@ import { extractMessageText } from "./sdk-helpers.ts";
 
 const log = logger("bridge:in-process");
 
+const BRANCHING_EVENT_TYPE = "session_replaced";
+
+
+function extractSelectedText(result: unknown): string {
+	return typeof result === "object" && result !== null && "selectedText" in result && typeof (result as { selectedText?: unknown }).selectedText === "string"
+		? (result as { selectedText: string }).selectedText
+		: "";
+}
 export class InProcessSessionHandle implements SessionHandle {
 	readonly sessionId: string;
 	readonly cwd: string;
@@ -211,6 +219,72 @@ export class InProcessSessionHandle implements SessionHandle {
 		// Synthetic event so WS subscribers refresh the session header's model
 		// label without waiting for the next assistant turn.
 		this.emit({ type: "session_updated", snapshot: this.snapshot() } as unknown as AgentSessionEventJson);
+	}
+
+	private dispatchSessionReplaced(session: AgentSession): void {
+		const s = session as any;
+		const snap: SessionSnapshot = {
+			sessionId: this.sessionId,
+			sessionFile: typeof s.sessionFile === "string" ? s.sessionFile : undefined,
+			sessionName: typeof s.sessionName === "string" ? s.sessionName : undefined,
+			cwd: this.cwd,
+			model:
+				s.model && typeof s.model === "object"
+					? { provider: String(s.model.provider), id: String(s.model.id) }
+					: undefined,
+			thinkingLevel: typeof s.thinkingLevel === "string" ? s.thinkingLevel : undefined,
+			isStreaming: Boolean(s.isStreaming),
+			messages: Array.isArray(s.messages) ? (s.messages as AgentMessageJson[]) : [],
+			todoPhases: typeof s.getTodoPhases === "function" ? s.getTodoPhases() : [],
+		};
+		const usage = this.getContextUsage();
+		if (usage) snap.contextUsage = usage;
+		this.emit({ type: BRANCHING_EVENT_TYPE, snapshot: snap } as unknown as AgentSessionEventJson);
+	}
+
+	async fork(): Promise<void> {
+		const s = this.session as unknown as { fork?: () => Promise<boolean> };
+		if (typeof s.fork !== "function") {
+			throw new Error("session.fork is not available on this SDK build");
+		}
+		const ok = await s.fork();
+		if (ok) this.dispatchSessionReplaced(this.session);
+	}
+
+	async branch(entryId: string): Promise<{ selectedText: string }> {
+		const s = this.session as unknown as {
+			branch?: (id: string) => Promise<{ selectedText: string; cancelled: boolean }>;
+		};
+		if (typeof s.branch !== "function") {
+			throw new Error("session.branch is not available on this SDK build");
+		}
+		const result = await s.branch(entryId);
+		if (result.cancelled) {
+			return { selectedText: result.selectedText };
+		}
+		this.dispatchSessionReplaced(this.session);
+		return { selectedText: extractSelectedText(result) };
+	}
+
+	async rewind(entryId: string): Promise<{ editorText?: string }> {
+		const s = this.session as unknown as {
+			navigateTree?: (id: string, opts?: { summarize?: boolean; customInstructions?: string }) => Promise<{ editorText?: string; cancelled: boolean }>;
+		};
+		if (typeof s.navigateTree !== "function") {
+			throw new Error("session.navigateTree is not available on this SDK build");
+		}
+		const result = await s.navigateTree(entryId);
+		if (result.cancelled) return {};
+		this.dispatchSessionReplaced(this.session);
+		return typeof result.editorText === "string" ? { editorText: result.editorText } : {};
+	}
+
+	getBranchPoints(): Array<{ entryId: string; text: string }> {
+		const s = this.session as unknown as {
+			getUserMessagesForBranching?: () => Array<{ entryId: string; text: string }>;
+		};
+		if (typeof s.getUserMessagesForBranching !== "function") return [];
+		return s.getUserMessagesForBranching();
 	}
 
 	async dispatchDeckSlashCommand(text: string): Promise<SlashDispatchResult> {
