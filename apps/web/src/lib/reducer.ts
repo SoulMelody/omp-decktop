@@ -394,14 +394,43 @@ function ingestMessage(state: SessionUi, msg: any): void {
 		case "user": {
 			const text = extractText(msg.content);
 			const synthetic = Boolean(msg.synthetic);
-			state.messages.push({
-				id: nextId("user"),
-				role: "user",
-				text,
-				images: extractImages(msg.content),
-				timestamp: typeof msg.timestamp === "number" ? msg.timestamp : Date.now(),
-				synthetic,
-			});
+			const images = extractImages(msg.content);
+			const ts = typeof msg.timestamp === "number" ? msg.timestamp : Date.now();
+
+			// Dedup against the optimistic user message added by sendPrompt.
+			// If the last message is a user message with identical content
+			// within a 5-second window, replace it with the server's version
+			// (authoritative id / timestamp) instead of adding a duplicate.
+			const DEDUP_WINDOW_MS = 5000;
+			const lastMsg = state.messages.length > 0 ? state.messages[state.messages.length - 1] : null;
+			const lastIsOpt =
+				lastMsg?.role === "user" &&
+				!lastMsg.synthetic &&
+				lastMsg.timestamp != null &&
+				ts - lastMsg.timestamp < DEDUP_WINDOW_MS &&
+				lastMsg.text === text &&
+				_optImagesEq(lastMsg.images, images);
+			if (lastIsOpt) {
+				// Replace the optimistic placeholder with the real message id
+				// so tool-call pairing doesn't reference a ghost id.
+				state.messages[state.messages.length - 1] = {
+					id: nextId("user"),
+					role: "user",
+					text,
+					images,
+					timestamp: ts,
+					synthetic,
+				};
+			} else {
+				state.messages.push({
+					id: nextId("user"),
+					role: "user",
+					text,
+					images,
+					timestamp: ts,
+					synthetic,
+				});
+			}
 			// If this real user message corresponds to a previously-queued prompt
 			// (same text, FIFO), drop the queued bubble so we don't render the
 			// same message twice. Synthetic round-trips (slash echoes) don't
@@ -699,4 +728,17 @@ function hydrateQueuedPrompts(raw: unknown): QueuedPrompt[] {
 		out.push(entry);
 	}
 	return out;
+}
+
+/** Shallow-equal comparison for image arrays used in optimistic dedup. */
+function _optImagesEq(a: ImageBlock[] | undefined, b: ImageBlock[] | undefined): boolean {
+	if (a === b) return true;
+	if (!a || !b) return !a && !b;
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		const ai = a[i]!;
+		const bi = b[i]!;
+		if (ai.data !== bi.data || ai.mimeType !== bi.mimeType) return false;
+	}
+	return true;
 }

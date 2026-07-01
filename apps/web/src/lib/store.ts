@@ -596,20 +596,38 @@ export const useStore = create<StoreState>()(
 				: { type: "prompt", sessionId: id, text };
 			get().ws?.send(frame);
 
-			// Optimistic feedback: flip an idle session to "preparing" right away
-			// so the UI reacts without waiting for the server's `turn_start`. A
-			// busy session queues the prompt server-side instead (surfaced via
-			// `prompt_queued`), so leave its status untouched.
 			const session = get().sessionsById[id];
-			if (session && session.status === "idle") {
-				set((s) => ({
-					sessionsById: {
-						...s.sessionsById,
-						[id]: { ...session, status: "preparing", lastError: undefined },
+			if (!session) return;
+
+			// Busy session: queue prompt server-side, no local state change.
+			if (session.status !== "idle") return;
+
+			// Optimistic user message: push it immediately so the user sees
+			// their input even if the WS frame is silently dropped (zombie
+			// connection, network hiccup). The reducer deduplicates against
+			// the server's `message_start` echo using content + time window.
+			const now = Date.now();
+			const optMsgId = `user-opt-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+			const optMsg: import("./types").UserMsg = {
+				id: optMsgId,
+				role: "user",
+				text,
+				images,
+				timestamp: now,
+			};
+
+			set((s) => ({
+				sessionsById: {
+					...s.sessionsById,
+					[id]: {
+						...session,
+						status: "preparing",
+						lastError: undefined,
+						messages: [...session.messages, optMsg],
 					},
-				}));
-				_armPrepareBackstop(id, set as _SetFn, get);
-			}
+				},
+			}));
+			_armPrepareBackstop(id, set as _SetFn, get);
 		},
 
 		abort() {
