@@ -63,14 +63,21 @@ export function SessionPicker() {
 	}
 
 	const recent = useMemo(() => {
-		const live = Object.values(sessionsById);
+		// `sessionsById` is the live in-memory subscription set, `sessions` is the
+		// on-disk index returned by the server for the current cwd. When the user
+		// picks a workspace the server filters by cwd, but a subscribed session
+		// from a previous workspace stays in `sessionsById` until the next
+		// `session_disposed` frame — so we must filter `live` by cwd too, or the
+		// picker shows sessions that no longer match the selected workspace.
+		const allLive = Object.values(sessionsById);
+		const live = cwdInUse ? allLive.filter((s) => s.cwd === cwdInUse) : allLive;
 		// Persisted rows, freshest first, that aren't already loaded in memory.
 		const persisted = sessions
 			.filter((s) => !sessionsById[s.id])
 			.sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt))
 			.slice(0, 6);
 		return { live, persisted };
-	}, [sessions, sessionsById]);
+	}, [sessions, sessionsById, cwdInUse]);
 
 	async function startFresh(): Promise<void> {
 		setBusy(true);

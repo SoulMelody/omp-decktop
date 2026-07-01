@@ -20,6 +20,9 @@ import type {
 	LspConfigResponse,
 	ProjectLspConfigResponse,
 	UpdateLspConfigRequest,
+	DapConfigResponse,
+	ProjectDapConfigResponse,
+	UpdateDapConfigRequest,
 } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
@@ -39,6 +42,9 @@ import {
 	writeManagedEnvUpdates,
 } from "./env-store.ts";
 import { setLogLevel } from "./log.ts";
+
+import { loadConfig as loadLspConfig } from "@oh-my-pi/pi-coding-agent/lsp/config";
+import { getAdapterConfigs } from "@oh-my-pi/pi-coding-agent/dap/config";
 
 export function buildSettingsRouter(
 	bridge: AgentBridge,
@@ -193,7 +199,6 @@ export function buildSettingsRouter(
 
 		return c.json({ ok: true });
 	});
-
 const LSP_CONFIG_PATH = path.join(getAgentDir(), "lsp.json");
 
 function getLspScopePaths(cwd: string) {
@@ -229,8 +234,6 @@ function normalizeServers(servers: Record<string, unknown> | undefined) {
 }
 
 async function loadGlobalLsp(cwd: string): Promise<LspConfigResponse> {
-	// @ts-expect-error SDK deep-import for loadConfig (not re-exported from public API yet).
-	const { loadConfig: loadLspConfig } = await import("@oh-my-pi/pi-coding-agent/src/lsp/config");
 	const config = loadLspConfig(cwd);
 	return {
 		...getLspScopePaths(cwd),
@@ -275,6 +278,63 @@ app.put("/workspaces/:cwd/lsp", async (c) => {
 		return c.json({ error: "invalid json body" }, 400);
 	}
 	await writeJsonFile(path.join(cwd, "lsp.json"), lspBody(body));
+	return c.json({ ok: true });
+});
+
+// ── DAP debugger routes ────────────────────────────────────────────────────
+
+const DAP_CONFIG_PATH = path.join(getAgentDir(), "dap.json");
+
+function getDapScopePaths(cwd: string) {
+	return {
+		configPath: DAP_CONFIG_PATH,
+		cwd,
+		workspaceRoot: cwd,
+		projectConfigPath: path.join(cwd, "dap.json"),
+	};
+}
+
+async function loadGlobalDap(cwd: string): Promise<DapConfigResponse> {
+	const adapters = getAdapterConfigs(cwd);
+	return {
+		...getDapScopePaths(cwd),
+		adapters: normalizeServers(adapters as unknown as Record<string, unknown>) as Record<string, unknown>,
+	} as unknown as DapConfigResponse;
+}
+
+async function loadProjectDap(cwd: string): Promise<ProjectDapConfigResponse> {
+	const merged = await loadGlobalDap(cwd);
+	return {
+		...merged,
+		mergedFromProject: (await readJsonFile(path.join(cwd, "dap.json"))) != null,
+	} as ProjectDapConfigResponse;
+}
+
+function dapBody(body: UpdateDapConfigRequest) {
+	return { adapters: normalizeServers(body.adapters as Record<string, unknown>) };
+}
+
+app.get("/settings/dap", async (c) => c.json(await loadGlobalDap(config.defaultCwd)));
+app.put("/settings/dap", async (c) => {
+	let body: UpdateDapConfigRequest;
+	try {
+		body = (await c.req.json()) as UpdateDapConfigRequest;
+	} catch {
+		return c.json({ error: "invalid json body" }, 400);
+	}
+	await writeJsonFile(DAP_CONFIG_PATH, dapBody(body));
+	return c.json({ ok: true });
+});
+app.get("/workspaces/:cwd/dap", async (c) => c.json(await loadProjectDap(c.req.param("cwd"))));
+app.put("/workspaces/:cwd/dap", async (c) => {
+	const cwd = c.req.param("cwd");
+	let body: UpdateDapConfigRequest;
+	try {
+		body = (await c.req.json()) as UpdateDapConfigRequest;
+	} catch {
+		return c.json({ error: "invalid json body" }, 400);
+	}
+	await writeJsonFile(path.join(cwd, "dap.json"), dapBody(body));
 	return c.json({ ok: true });
 });
 const AGENT_CONFIG_DESCRIPTIONS: Record<string, string> = {

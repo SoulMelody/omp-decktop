@@ -23,6 +23,7 @@ import type {
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 	ExtensionUiComponentFactory,
+	ExtensionUISelectItem,
 	ExtensionWidgetContent,
 	ExtensionWidgetOptions,
 	TerminalInputHandler,
@@ -113,10 +114,15 @@ export class ExtensionUIBridge implements ExtensionUIContext {
 
 	select(
 		prompt: string,
-		options: string[],
+		options: ExtensionUISelectItem[],
 		dialogOptions?: ExtensionUIDialogOptions,
 	): Promise<string | undefined> {
-		const fields: Pick<DialogOpenFrame, "options"> = { options };
+		// The SDK accepts `string | { label, description }` per option, but the
+		// wire frame carries the same shape so the deck can render descriptions
+		// under each label. Each item is normalized here — strings stay as-is
+		// (description empty), objects pass through. The client responds with
+		// the selected `label` string, which is what the SDK returns.
+		const fields: Pick<DialogOpenFrame, "options"> = { options: options.map(normalizeSelectOption) };
 		return this.openDialog<string | undefined>(
 			{ kind: "select", prompt, ...fields },
 			dialogOptions,
@@ -361,4 +367,27 @@ export class ExtensionUIBridge implements ExtensionUIContext {
 		this.nextDialogId += 1;
 		return id;
 	}
+}
+
+/**
+ * Coerce an SDK `ExtensionUISelectItem` into the wire-shape used by the
+ * deck. The SDK accepts `string | { label, description }` per option; the
+ * web client renders descriptions when present. We do the type narrowing
+ * once on the server so the rest of the bridge can treat `options` as a
+ * uniform array shape and so a malformed runtime payload can never reach
+ * the React renderer (which would throw on objects without `React.isValidElement`).
+ */
+function normalizeSelectOption(
+	item: ExtensionUISelectItem,
+): { label: string; description?: string } {
+	if (typeof item === "string") return { label: item };
+	if (item && typeof item === "object" && typeof item.label === "string") {
+		return typeof item.description === "string"
+			? { label: item.label, description: item.description }
+			: { label: item.label };
+	}
+	// Malformed entry (null, number, missing label) — surface a fallback so the
+	// option still renders something instead of crashing the modal. This branch
+	// is defensive; the SDK's typings rule it out at compile time.
+	return { label: String(item ?? "") };
 }

@@ -31,7 +31,11 @@ describe("ExtensionUIBridge", () => {
 		expect(frame.sessionId).toBe("s_test");
 		expect(frame.kind).toBe("select");
 		expect(frame.prompt).toBe("Pick one");
-		expect(frame.options).toEqual(["a", "b", "c"]);
+		expect(frame.options).toEqual([
+			{ label: "a" },
+			{ label: "b" },
+			{ label: "c" },
+		]);
 
 		bridge.handleResponse(frame.dialogId, { value: "b" });
 		expect(await promise).toBe("b");
@@ -45,6 +49,33 @@ describe("ExtensionUIBridge", () => {
 		const frame = frames[0] as OpenFrame;
 		bridge.handleResponse(frame.dialogId, { cancelled: true });
 		expect(await promise).toBeUndefined();
+	});
+
+	it("normalizes object-shape options to {label, description} on the wire", async () => {
+		// SDK accepts `string | { label, description }` per option (see
+		// `@oh-my-pi/pi-coding-agent` ExtensionUISelectItem). Without
+		// normalization the deck's React renderer chokes on the raw object,
+		// throwing "Objects are not valid as a React child".
+		const bridge = new ExtensionUIBridge("s_test");
+		const { frames } = collect(bridge);
+
+		const promise = bridge.select("Pick one", [
+			{ label: "Fast", description: "Quick and cheap" },
+			{ label: "Slow", description: "Thorough reasoning" },
+			"plain",
+		]);
+
+		const frame = frames[0] as OpenFrame;
+		expect(frame.kind).toBe("select");
+		expect(frame.options).toEqual([
+			{ label: "Fast", description: "Quick and cheap" },
+			{ label: "Slow", description: "Thorough reasoning" },
+			{ label: "plain" },
+		]);
+
+		// Response uses the label string — matches what the SDK returns.
+		bridge.handleResponse(frame.dialogId, { value: "Slow" });
+		expect(await promise).toBe("Slow");
 	});
 
 	it("editor() forwards prefill and resolves with response value", async () => {

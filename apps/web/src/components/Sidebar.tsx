@@ -51,8 +51,18 @@ export function Sidebar() {
 		}
 	}
 
-	const liveSessions = Object.values(sessionsById);
+	const allLive = Object.values(sessionsById);
+	// `live` is the in-memory subscription set; `persisted` is the on-disk
+	// index the server returned. Both must be filtered by the selected
+	// workspace so the count matches what we actually render — otherwise a
+	// session in memory from a previous workspace sticks around as a "ghost"
+	// row (the count says 1, the list shows 2) and the user can't tell which
+	// workspace it actually belongs to.
+	const liveSessions = selectedCwd
+		? allLive.filter((s) => s.cwd === selectedCwd)
+		: allLive;
 	const persisted = filtered.filter((s) => !sessionsById[s.id]);
+	const visibleCount = liveSessions.length + persisted.length;
 
 	async function handleDelete(id: string): Promise<void> {
 		if (!confirm("Delete this session?")) return;
@@ -109,7 +119,7 @@ export function Sidebar() {
 			</div>
 
 			<div className="flex items-center justify-between px-3 pt-3 pb-1">
-				<div className="meta">Sessions · {filtered.length}</div>
+				<div className="meta">Sessions · {visibleCount}</div>
 				<button
 					type="button"
 					className="text-ink-3 hover:text-ink"
@@ -156,7 +166,7 @@ export function Sidebar() {
 					/>
 				))}
 
-				{filtered.length === 0 && liveSessions.length === 0 ? (
+				{visibleCount === 0 ? (
 					<div className="px-3 py-6 text-center font-mono text-2xs text-ink-3">
 						No sessions yet.
 					</div>

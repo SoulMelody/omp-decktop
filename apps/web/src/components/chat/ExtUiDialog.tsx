@@ -110,16 +110,32 @@ interface SelectBodyProps {
 }
 
 /**
- * Radio list with optional "(Recommended)" marker and free-form
- * "Other (type your own)" input. Mirrors the TUI's `ask` UX so users coming
- * from `omp` see the same options.
+ * Coerce one option entry (string or `{label, description?}`) into the
+ * `{label, description}` shape used by the renderer. Bridges the SDK's
+ * `ExtensionUISelectItem = string | { label, description }` union onto the
+ * wire shape sent by `ExtensionUIBridge.select()`.
+ */
+function asOption(item: string | { label: string; description?: string }): {
+	label: string;
+	description?: string;
+} {
+	if (typeof item === "string") return { label: item };
+	return item;
+}
+
+/**
+ * Radio list with optional "(Recommended)" marker, optional per-option
+ * description (when the SDK surfaces it), and free-form "Other (type your
+ * own)" input. Mirrors the TUI's `ask` UX so users coming from `omp` see
+ * the same options.
  */
 function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Element {
-	const options = dialog.options ?? [];
+	const rawOptions = dialog.options ?? [];
+	const options = useMemo(() => rawOptions.map(asOption), [rawOptions]);
 	const initial = useMemo(() => {
-		if (typeof dialog.initialIndex === "number") return options[dialog.initialIndex];
-		if (typeof dialog.recommended === "number") return options[dialog.recommended];
-		return options[0];
+		if (typeof dialog.initialIndex === "number") return options[dialog.initialIndex]?.label;
+		if (typeof dialog.recommended === "number") return options[dialog.recommended]?.label;
+		return options[0]?.label;
 	}, [dialog.initialIndex, dialog.recommended, options]);
 
 	const [selection, setSelection] = useState<string | undefined>(initial);
@@ -156,17 +172,25 @@ function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Elemen
 					const isRecommended = idx === dialog.recommended;
 					return (
 						<label
-							key={opt}
-							className="flex cursor-pointer items-center gap-2 rounded border border-line/60 px-2.5 py-1.5 text-sm text-ink hover:border-line"
+							key={opt.label}
+							className="flex cursor-pointer items-start gap-2 rounded border border-line/60 px-2.5 py-1.5 text-sm text-ink hover:border-line"
 						>
 							<input
 								type="radio"
 								name="ext-ui-select"
-								value={opt}
-								checked={selection === opt}
-								onChange={() => setSelection(opt)}
+								value={opt.label}
+								checked={selection === opt.label}
+								onChange={() => setSelection(opt.label)}
+								className="mt-1"
 							/>
-							<span className="flex-1">{opt}</span>
+							<span className="flex-1">
+								<span className="block">{opt.label}</span>
+								{opt.description ? (
+									<span className="mt-0.5 block font-mono text-2xs text-ink-3">
+										{opt.description}
+									</span>
+								) : null}
+							</span>
 							{isRecommended ? (
 								<span className="font-mono text-2xs uppercase tracking-meta text-accent">
 									Recommended

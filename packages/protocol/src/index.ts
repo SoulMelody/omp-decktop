@@ -112,6 +112,38 @@ export interface ProjectLspConfigResponse extends LspConfigResponse {
 	projectConfigPath?: string;
 	mergedFromProject: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings / DAP debugger
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DapAdapterConfig {
+	command: string;
+	args?: string[];
+	languages?: string[];
+	fileTypes?: string[];
+	rootMarkers?: string[];
+	launchDefaults?: Record<string, unknown>;
+	attachDefaults?: Record<string, unknown>;
+	connectMode?: "stdio" | "socket";
+	acceptsDirectoryProgram?: boolean;
+}
+
+export interface DapConfigResponse {
+	configPath: string;
+	cwd: string;
+	workspaceRoot?: string;
+	adapters: Record<string, DapAdapterConfig>;
+}
+
+export interface UpdateDapConfigRequest {
+	adapters: Record<string, DapAdapterConfig | null>;
+}
+
+export interface ProjectDapConfigResponse extends DapConfigResponse {
+	projectConfigPath?: string;
+	mergedFromProject: boolean;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings / managed environment
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1072,8 +1104,14 @@ export type ServerFrame =
 			kind: "select" | "editor" | "confirm" | "input";
 			/** Title / prompt line shown above the controls. */
 			prompt: string;
-			/** select: option labels in display order. */
-			options?: string[];
+			/**
+			 * select: options in display order. Each entry is either a plain string
+			 * label or `{ label, description }` when the SDK surfaced a per-option
+			 * description (matches the on-screen UX of `omp`'s ask tool). The deck
+			 * renders the `label` and, when present, a small `description` line
+			 * under it. Response `value` is always the selected `label` string.
+			 */
+			options?: Array<string | { label: string; description?: string }>;
 			/** select: hint that the dialog allows multiple selections. */
 			multi?: boolean;
 			/** select: index of the option pre-focused on open. */
