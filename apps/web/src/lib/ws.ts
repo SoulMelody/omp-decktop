@@ -16,7 +16,7 @@ export class WsClient {
 	private status: WsStatus = "closed";
 	private url: string;
 	private closed = false;
-	private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+	private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(url?: string) {
 		const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -78,7 +78,7 @@ export class WsClient {
 	forceReconnect(): void {
 		if (this.closed) return;
 		if (this.heartbeatTimer) {
-			clearInterval(this.heartbeatTimer);
+			clearTimeout(this.heartbeatTimer);
 			this.heartbeatTimer = null;
 		}
 		const sock = this.socket;
@@ -139,8 +139,9 @@ export class WsClient {
 	 * The store calls this each time it receives a heartbeat frame.
 	 */
 	resetHeartbeatTimer(timeoutMs: number, onTimeout: () => void): void {
-		if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-		this.heartbeatTimer = setInterval(() => {
+		if (this.heartbeatTimer) clearTimeout(this.heartbeatTimer);
+		this.heartbeatTimer = setTimeout(() => {
+			this.heartbeatTimer = null;
 			onTimeout();
 		}, timeoutMs);
 	}
@@ -148,7 +149,7 @@ export class WsClient {
 	/** Cancel the heartbeat watchdog timer without triggering a reconnect. */
 	clearHeartbeatTimer(): void {
 		if (this.heartbeatTimer) {
-			clearInterval(this.heartbeatTimer);
+			clearTimeout(this.heartbeatTimer);
 			this.heartbeatTimer = null;
 		}
 	}

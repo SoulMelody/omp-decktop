@@ -15,7 +15,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "../lib/store";
-const HEALTHY_MS = 1_000;
+const HEALTHY_MS = 10_000;
 const WARN_MS = 20_000;
 
 type DotColor = "green" | "yellow" | "red";
@@ -61,16 +61,17 @@ export function ConnectionIndicator(): JSX.Element {
 		color === "green"
 			? "connected"
 			: color === "yellow"
-			? "reconnecting"
+			? "slow heartbeat"
 			: heartbeat === null
 			? "no heartbeat yet"
 			: "disconnected";
+	const gapLabel = heartbeat ? `${(gap / 1000).toFixed(1)}s` : "—";
 
 	const tooltip = heartbeat
 		? [
 				`status: ${label}`,
 				`ws: ${wsStatus}`,
-				`gap: ${(gap / 1000).toFixed(1)}s since last heartbeat`,
+				`gap: ${gapLabel} since last heartbeat`,
 				`server started: ${heartbeat.serverStartedAt}`,
 				`uptime: ${formatUptime(heartbeat.uptimeSecs)}`,
 				`version: ${heartbeat.version}`,
