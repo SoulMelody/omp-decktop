@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as fs from "node:fs/promises";
 import type {
 	AgentConfigEntry,
 	AgentConfigResponse,
@@ -16,6 +17,9 @@ import type {
 	ModelRolesResponse,
 	ModelInfo,
 	UpdateModelRolesRequest,
+	LspConfigResponse,
+	ProjectLspConfigResponse,
+	UpdateLspConfigRequest,
 } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
@@ -190,6 +194,89 @@ export function buildSettingsRouter(
 		return c.json({ ok: true });
 	});
 
+const LSP_CONFIG_PATH = path.join(getAgentDir(), "lsp.json");
+
+function getLspScopePaths(cwd: string) {
+	return {
+		configPath: LSP_CONFIG_PATH,
+		cwd,
+		workspaceRoot: cwd,
+		projectConfigPath: path.join(cwd, "lsp.json"),
+	};
+}
+
+function cloneJson<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value)) as T;
+}
+
+async function readJsonFile(filePath: string): Promise<unknown | null> {
+	try {
+		return JSON.parse(await fs.readFile(filePath, "utf8"));
+	} catch {
+		return null;
+	}
+}
+
+async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
+	await fs.mkdir(path.dirname(filePath), { recursive: true });
+	await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function normalizeServers(servers: Record<string, unknown> | undefined) {
+	return Object.fromEntries(
+		Object.entries(servers ?? {}).map(([name, config]) => [name, cloneJson(config)]),
+	);
+}
+
+async function loadGlobalLsp(cwd: string): Promise<LspConfigResponse> {
+	// @ts-expect-error SDK deep-import for loadConfig (not re-exported from public API yet).
+	const { loadConfig: loadLspConfig } = await import("@oh-my-pi/pi-coding-agent/src/lsp/config");
+	const config = loadLspConfig(cwd);
+	return {
+		...getLspScopePaths(cwd),
+		servers: normalizeServers(config.servers),
+		idleTimeoutMs: config.idleTimeoutMs,
+	} as unknown as LspConfigResponse;
+}
+
+async function loadProjectLsp(cwd: string): Promise<ProjectLspConfigResponse> {
+	const merged = await loadGlobalLsp(cwd);
+	return {
+		...merged,
+		mergedFromProject: (await readJsonFile(path.join(cwd, "lsp.json"))) != null,
+	} as ProjectLspConfigResponse;
+}
+
+function lspBody(body: UpdateLspConfigRequest) {
+	return {
+		servers: normalizeServers(body.servers as Record<string, unknown>),
+		...(body.idleTimeoutMs == null ? {} : { idleTimeoutMs: body.idleTimeoutMs }),
+	};
+}
+
+app.get("/settings/lsp", async (c) => c.json(await loadGlobalLsp(config.defaultCwd)));
+app.put("/settings/lsp", async (c) => {
+	let body: UpdateLspConfigRequest;
+	try {
+		body = (await c.req.json()) as UpdateLspConfigRequest;
+	} catch {
+		return c.json({ error: "invalid json body" }, 400);
+	}
+	await writeJsonFile(LSP_CONFIG_PATH, lspBody(body));
+	return c.json({ ok: true });
+});
+app.get("/workspaces/:cwd/lsp", async (c) => c.json(await loadProjectLsp(c.req.param("cwd"))));
+app.put("/workspaces/:cwd/lsp", async (c) => {
+	const cwd = c.req.param("cwd");
+	let body: UpdateLspConfigRequest;
+	try {
+		body = (await c.req.json()) as UpdateLspConfigRequest;
+	} catch {
+		return c.json({ error: "invalid json body" }, 400);
+	}
+	await writeJsonFile(path.join(cwd, "lsp.json"), lspBody(body));
+	return c.json({ ok: true });
+});
 const AGENT_CONFIG_DESCRIPTIONS: Record<string, string> = {
 	"lsp.enabled": "Enable the LSP tool for code intelligence.",
 	"lsp.lazy": "Start language servers on first use instead of at startup.",

@@ -70,6 +70,48 @@ export interface ListWorkspacesResponse {
 	defaultCwd: string;
 }
 
+export interface LspServerConfig {
+	command: string;
+	args?: string[];
+	fileTypes: string[];
+	rootMarkers: string[];
+	initOptions?: Record<string, unknown>;
+	settings?: Record<string, unknown>;
+	disabled?: boolean;
+	warmupTimeoutMs?: number;
+	workspaceReadyTimings?: {
+		timeoutMs?: number;
+		pollMs?: number;
+		settleMs?: number;
+		statusRequestTimeoutMs?: number;
+	};
+	capabilities?: {
+		flycheck?: boolean;
+		ssr?: boolean;
+		expandMacro?: boolean;
+		runnables?: boolean;
+		relatedTests?: boolean;
+	};
+	isLinter?: boolean;
+}
+
+export interface LspConfigResponse {
+	configPath: string;
+	cwd: string;
+	workspaceRoot?: string;
+	servers: Record<string, LspServerConfig>;
+	idleTimeoutMs?: number;
+}
+
+export interface UpdateLspConfigRequest {
+	servers: Record<string, LspServerConfig | null>;
+	idleTimeoutMs?: number | null;
+}
+
+export interface ProjectLspConfigResponse extends LspConfigResponse {
+	projectConfigPath?: string;
+	mergedFromProject: boolean;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings / managed environment
 // ─────────────────────────────────────────────────────────────────────────────
