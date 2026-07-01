@@ -8,6 +8,7 @@ import { MessagingSection } from "@/components/settings/MessagingSection";
 import { OrientationSection } from "@/components/settings/OrientationSection";
 import { NotificationsSection } from "@/components/settings/NotificationsSection";
 import { ProvidersSection } from "@/components/settings/ProvidersSection";
+import { DapSection } from "@/components/settings/DapSection";
 import { LspSection } from "@/components/settings/LspSection";
 import { SECTIONS, normalizeSection, type SectionId } from "@/components/settings/settings-helpers";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,8 @@ export function SettingsView() {
 								<ModelRolesSection />
 							) : selected === "lsp" ? (
 								<LspSection />
+							) : selected === "dap" ? (
+								<DapSection />
 							) : (
 								<StubSection section={selected} />
 							)}
@@ -81,7 +84,7 @@ export function SettingsView() {
 function StubSection({
 	section,
 }: {
-	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles" | "lsp">;
+	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "notifications" | "modelRoles" | "lsp" | "dap">;
 }) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
 	const { t } = useTranslation();
