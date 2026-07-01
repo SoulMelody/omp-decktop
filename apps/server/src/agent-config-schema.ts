@@ -1,4 +1,4 @@
-/** Settable omp SDK config.yml keys surfaced in the deck's LSP/Eval settings. */
+/** Settable omp SDK config.yml keys surfaced in the deck's LSP settings. */
 export type AgentConfigValue = boolean | string;
 
 type FieldType =
@@ -7,22 +7,12 @@ type FieldType =
 	| { kind: "enum"; options: readonly string[] };
 
 export const AGENT_CONFIG_SCHEMA: Record<string, FieldType> = {
-	// LSP
 	"lsp.enabled": { kind: "boolean" },
 	"lsp.lazy": { kind: "boolean" },
 	"lsp.formatOnWrite": { kind: "boolean" },
 	"lsp.diagnosticsOnWrite": { kind: "boolean" },
 	"lsp.diagnosticsOnEdit": { kind: "boolean" },
 	"lsp.diagnosticsDeduplicate": { kind: "boolean" },
-	// Eval / kernels
-	"eval.py": { kind: "boolean" },
-	"eval.js": { kind: "boolean" },
-	"eval.rb": { kind: "boolean" },
-	"eval.jl": { kind: "boolean" },
-	"python.kernelMode": { kind: "enum", options: ["session", "per-call"] },
-	"python.interpreter": { kind: "string" },
-	"ruby.interpreter": { kind: "string" },
-	"julia.interpreter": { kind: "string" },
 };
 
 export const AGENT_CONFIG_KEYS = Object.keys(AGENT_CONFIG_SCHEMA);

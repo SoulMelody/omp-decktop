@@ -2,10 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { AGENT_CONFIG_KEYS, validateAgentConfigUpdate } from "./agent-config-schema.ts";
 
 describe("agent-config-schema", () => {
-	it("exposes lsp + eval keys", () => {
+	it("exposes only LSP keys", () => {
 		expect(AGENT_CONFIG_KEYS).toContain("lsp.enabled");
-		expect(AGENT_CONFIG_KEYS).toContain("python.kernelMode");
-		expect(AGENT_CONFIG_KEYS).toContain("python.interpreter");
+		expect(AGENT_CONFIG_KEYS).toContain("lsp.lazy");
+		expect(AGENT_CONFIG_KEYS).toContain("lsp.diagnosticsDeduplicate");
+		// Eval / kernel settings are intentionally NOT exposed — see python-repl docs.
+		expect(AGENT_CONFIG_KEYS).not.toContain("eval.py");
+		expect(AGENT_CONFIG_KEYS).not.toContain("python.interpreter");
 	});
 
 	it("accepts a valid boolean key", () => {
@@ -20,13 +23,8 @@ describe("agent-config-schema", () => {
 		expect(validateAgentConfigUpdate("lsp.enabled", "yes")).toMatch(/boolean/i);
 	});
 
-	it("enforces python.kernelMode enum", () => {
-		expect(validateAgentConfigUpdate("python.kernelMode", "session")).toBeUndefined();
-		expect(validateAgentConfigUpdate("python.kernelMode", "weird")).toMatch(/session|per-call/);
-	});
-
-	it("accepts string interpreter path", () => {
-		expect(validateAgentConfigUpdate("python.interpreter", "/usr/bin/python3")).toBeUndefined();
-		expect(validateAgentConfigUpdate("python.interpreter", 5)).toMatch(/string/i);
+	it("rejects previously-eval keys", () => {
+		expect(validateAgentConfigUpdate("eval.py", true)).toMatch(/unknown/i);
+		expect(validateAgentConfigUpdate("python.kernelMode", "session")).toMatch(/unknown/i);
 	});
 });

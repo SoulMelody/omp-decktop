@@ -118,7 +118,6 @@ const en = {
 			notifications: { label: "Notifications", description: "Idle alerts and quiet hours" },
 			modelRoles: { label: "Model Roles", description: "Role-specific model routing" },
 			lsp: { label: "LSP", description: "Language servers and diagnostics" },
-			eval: { label: "Eval", description: "Code interpreter kernels" },
 			about: { label: "About", description: "Version, paths, diagnostics" },
 		},
 		notes: {
@@ -318,13 +317,6 @@ const en = {
 		lsp: {
 			heading: "LSP",
 			intro: "Language-server integration for code intelligence. Writes to the omp config.yml.",
-		},
-		eval: {
-			heading: "Eval kernels",
-			intro: "Code interpreter languages and Python kernel mode. Writes to the omp config.yml.",
-			kernelMode: "Python kernel mode",
-			interpreterPlaceholder: "auto-detect",
-			idleHint: "Idle kernel reaping is controlled by OMP_DECK_IDLE_TIMEOUT_MS in Env settings.",
 		},
 		restart: "Restart",
 		reload: "Reload",
