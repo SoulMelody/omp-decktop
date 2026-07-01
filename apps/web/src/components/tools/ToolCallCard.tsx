@@ -23,6 +23,7 @@ export interface ToolRendererProps {
 	args: Record<string, unknown>;
 	intent?: string;
 	stream?: ToolCallStream;
+	sessionId?: string;
 }
 
 const DOT_TONE = {

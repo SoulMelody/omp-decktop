@@ -7,9 +7,9 @@ import { ToolCallCard } from "../tools/ToolCallCard";
 interface Props {
 	msg: AssistantMsg;
 	toolCalls: Record<string, ToolCallStream>;
+	sessionId?: string;
 }
-
-export function AssistantMessage({ msg, toolCalls }: Props) {
+export function AssistantMessage({ msg, toolCalls, sessionId }: Props) {
 	const lastBlockIdx = msg.blocks.length - 1;
 	const endTime = msg.timestamp && msg.durationMs
 		? formatClockTime(msg.timestamp + msg.durationMs)
@@ -83,6 +83,7 @@ export function AssistantMessage({ msg, toolCalls }: Props) {
 								args={b.arguments}
 								intent={b.intent}
 								stream={stream}
+								sessionId={sessionId}
 							/>
 						);
 					}

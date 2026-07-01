@@ -136,7 +136,7 @@ export function Chat() {
 										}}
 										className={wrapperClassName}
 									>
-										<AssistantMessage msg={m} toolCalls={toolCalls} />
+										<AssistantMessage msg={m} toolCalls={toolCalls} sessionId={session.sessionId} />
 									</div>
 								);
 							case "notice":
