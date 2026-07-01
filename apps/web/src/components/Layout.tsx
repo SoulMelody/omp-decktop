@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { NavRail } from "./NavRail";
 import { FoldVertical, Menu, PanelRight, UnfoldVertical, X } from "lucide-react";
+import { LocaleSwitcher } from "./LocaleSwitcher";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { ConnectionIndicator } from "./ConnectionIndicator";
@@ -49,8 +50,9 @@ export function Layout({ sidebar, main, inspector, topBar }: Props) {
 				<div className="font-mono text-[13px] font-medium tracking-tight text-ink">
 					omp<span className="text-ink-3">·</span>deck
 				</div>
-				<div className="ml-auto flex min-w-0 items-center gap-2 overflow-hidden">
-					<div className="hidden min-w-0 truncate sm:block">{topBar}</div>
+				<div className="ml-auto flex min-w-0 items-center gap-2">
+					<div className="hidden min-w-0 overflow-hidden truncate sm:block">{topBar}</div>
+					<LocaleSwitcher />
 					<ConnectionIndicator />
 					<ToolCardsToggle />
 					<button
