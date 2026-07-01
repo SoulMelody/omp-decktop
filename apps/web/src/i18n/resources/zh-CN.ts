@@ -103,6 +103,8 @@ const zhCN = {
 			appearance: { label: "外观", description: "主题、颜色、字体" },
 			language: { label: "语言", description: "界面显示语言" },
 			workspaces: { label: "工作区", description: "固定根目录与显示名称" },
+			modelRoles: { label: "模型角色", description: "按角色路由模型" },
+			lsp: { label: "LSP", description: "语言服务器与诊断" },
 			notifications: { label: "通知", description: "空闲提醒与免打扰时段" },
 			about: { label: "关于", description: "版本、路径、诊断信息" },
 		},
@@ -172,6 +174,9 @@ const zhCN = {
 			granted: "已授权",
 			denied: "已拒绝",
 			unsupported: "不支持",
+			active: "当前",
+			pinned: "已固定",
+			grantedDesc: "服务器标记为重要的项目会触发系统通知（例程失败、长时间运行的步骤、Agent 任务完成）。",
 			audioEnabled: "已启用",
 			audioMuted: "已静音",
 		},
@@ -183,6 +188,8 @@ const zhCN = {
 			byDefault: "默认",
 			preludeDesc: "在方向文件之后添加到每个会话的系统提示前。用于设置跨对话的全局指令。",
 			unsavedPrelude: "未保存更改",
+			savedPrelude: "已保存。新会话将使用此序言。",
+			overrideCleared: "覆盖已清除。新会话将使用内置默认值。",
 			startOrchestrator: "/start 编排器",
 			onDisk: "已保存",
 			missing: "缺失",
@@ -201,6 +208,8 @@ const zhCN = {
 			descriptionLabel: "描述",
 			bodyLabel: "正文",
 			autoStart: "新会话时自动启动",
+			autoStartEnabled: "自动启动已启用。新会话将触发 /start。",
+			autoStartDisabled: "自动启动已禁用。新会话将静默打开。",
 		},
 		maintenance: {
 			gate: "维护门",
@@ -229,6 +238,7 @@ const zhCN = {
 		providers: {
 			heading: "提供者",
 			loggedIn: "已登录",
+			intro: "通过 OAuth 登录到订阅提供商（Claude Pro/Max、ChatGPT Plus/Pro 等）。API 密钥位于环境变量 — 此处用于浏览器流程认证。",
 			notConfigured: "未配置",
 			ccSwitch: "cc-switch",
 			noProvidersConfigured: "尚未配置任何提供者。",
@@ -257,6 +267,7 @@ const zhCN = {
 			skipped: "已跳过（不支持的格式）",
 			noImportable: "cc-switch 配置中未找到可导入的提供者。",
 			resultsTitle: "导入结果",
+			importResults: "导入结果",
 		},
 		oauthFlow: {
 			signInTo: "登录 {{providerName}}",
@@ -491,6 +502,20 @@ const zhCN = {
 			view: "查看",
 			dismissNotification: "关闭通知",
 		},
+	},
+
+	// ── 会话选择器 ────────────────────────────────────────────────────────
+	sessionPicker: {
+		startSession: "开始会话",
+		workspace: "工作区",
+		newSession: "新会话",
+		live: "进行中",
+		recent: "最近",
+		noPreviousSessions: "暂无历史会话 — 请在上方新建。",
+		welcomeTaskWaiting: "在您的看板中等待",
+		openTasks: "打开任务",
+		skippedOnboarding: "您已跳过引导。随时可重新运行：",
+		onboardingLink: "设置 → 引导",
 	},
 
 	chat: {
