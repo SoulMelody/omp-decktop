@@ -112,6 +112,38 @@ export interface ProjectLspConfigResponse extends LspConfigResponse {
 	projectConfigPath?: string;
 	mergedFromProject: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings / DAP debugger
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DapAdapterConfig {
+	command: string;
+	args?: string[];
+	languages?: string[];
+	fileTypes?: string[];
+	rootMarkers?: string[];
+	launchDefaults?: Record<string, unknown>;
+	attachDefaults?: Record<string, unknown>;
+	connectMode?: "stdio" | "socket";
+	acceptsDirectoryProgram?: boolean;
+}
+
+export interface DapConfigResponse {
+	configPath: string;
+	cwd: string;
+	workspaceRoot?: string;
+	adapters: Record<string, DapAdapterConfig>;
+}
+
+export interface UpdateDapConfigRequest {
+	adapters: Record<string, DapAdapterConfig | null>;
+}
+
+export interface ProjectDapConfigResponse extends DapConfigResponse {
+	projectConfigPath?: string;
+	mergedFromProject: boolean;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings / managed environment
 // ─────────────────────────────────────────────────────────────────────────────
