@@ -524,7 +524,34 @@ export const useStore = create<StoreState>()(
 		async refreshSessions(cwd?: string) {
 			try {
 				const resp: ListSessionsResponse = await api.listSessions(cwd);
-				set({ sessions: resp.sessions });
+				const knownIds = new Set(resp.sessions.map((s) => s.id));
+				// Drop any in-memory session the server no longer reports, but only
+				// when we aren't actively subscribed to it. Subscribed sessions
+				// outlive the snapshot (they're live processes) and their removal
+				// is driven by the `session_disposed` frame. If that frame is
+				// dropped (e.g. tab backgrounded, network blip) we don't want to
+				// yank a session the user is mid-turn on; the next resubscribe
+				// after a reconnect will rehydrate it.
+				const subscribed = get().subscribed;
+				// Also preserve the session we're about to reactivate from a page
+				// reload (`bootstrap` subscribes to `activeId` after this call, so
+				// at this moment it isn't in `subscribed` yet — pruning it here
+				// would erase the only entry the user can click on to resume).
+				const activeId = get().activeId;
+				set((s) => {
+					let changed = false;
+					const next: Record<string, SessionUi> = {};
+					for (const [id, sess] of Object.entries(s.sessionsById)) {
+						if (!knownIds.has(id) && !subscribed.has(id) && id !== activeId) {
+							changed = true;
+							continue;
+						}
+						next[id] = sess;
+					}
+					return changed
+						? { sessions: resp.sessions, sessionsById: next }
+						: { sessions: resp.sessions };
+				});
 			} catch (err) {
 				console.warn("listSessions failed", err);
 			}
