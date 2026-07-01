@@ -87,6 +87,20 @@ export function LspSection() {
 		}
 	}
 
+	const newServerDefaults: Record<string, unknown> = { command: "", fileTypes: [], rootMarkers: [], disabled: false };
+
+	function addServer(scope: "global" | "project") {
+		const name = window.prompt("Server name:");
+		if (!name) return;
+		if (scope === "global" && globalConfig) {
+			if (globalConfig.servers[name]) { setError(`Server "${name}" already exists`); return; }
+			setGlobalConfig({ ...globalConfig, servers: { ...globalConfig.servers, [name]: { ...newServerDefaults } as unknown as LspServerConfig } });
+		} else if (scope === "project" && projectConfig) {
+			if (projectConfig.servers[name]) { setError(`Server "${name}" already exists`); return; }
+			setProjectConfig({ ...projectConfig, servers: { ...projectConfig.servers, [name]: { ...newServerDefaults } as unknown as LspServerConfig } });
+		}
+	}
+
 	const serverNames = (servers: Record<string, unknown>) => Object.keys(servers).sort();
 
 	return (
@@ -104,9 +118,14 @@ export function LspSection() {
 						<div className="font-mono text-xs font-medium uppercase tracking-meta">Global LSP</div>
 						<div className="text-xs text-ink-3">{globalConfig?.configPath ?? "..."}</div>
 					</div>
-					<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveGlobal()} disabled={saving === "global" || !globalConfig}>
-						{t("common.actions.save", "Save")}
-					</button>
+					<div className="flex items-center gap-2">
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => addServer("global")}>
+							+ Add
+						</button>
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveGlobal()} disabled={saving === "global" || !globalConfig}>
+							{t("common.actions.save", "Save")}
+						</button>
+					</div>
 				</div>
 				{globalConfig && serverNames(globalConfig.servers as Record<string, unknown>).map((name) => (
 					<ServerCard
@@ -127,9 +146,14 @@ export function LspSection() {
 						<div className="font-mono text-xs font-medium uppercase tracking-meta">Workspace LSP</div>
 						<div className="text-xs text-ink-3">{projectConfig?.projectConfigPath ?? "..."}</div>
 					</div>
-					<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveProject()} disabled={saving === "project" || !projectConfig}>
-						{t("common.actions.save", "Save")}
-					</button>
+					<div className="flex items-center gap-2">
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => addServer("project")}>
+							+ Add
+						</button>
+						<button className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => void saveProject()} disabled={saving === "project" || !projectConfig}>
+							{t("common.actions.save", "Save")}
+						</button>
+					</div>
 				</div>
 				<div className="text-xs text-ink-3">cwd: {projectConfig?.cwd ?? "..."} · merged: {projectConfig?.mergedFromProject ? "yes" : "no"}</div>
 				{projectConfig && serverNames(projectConfig.servers as Record<string, unknown>).map((name) => (
