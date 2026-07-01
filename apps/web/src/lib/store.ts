@@ -123,6 +123,13 @@ function _flushBatch(set: _SetFn, get: () => StoreState): void {
 			if (prev.status === "preparing" && next.status !== "preparing") {
 				_clearPrepareTimer(sessionId);
 			}
+			// Streaming watchdog: re-arm on each event for a streaming session
+			// (activity proves the stream is alive), clear when streaming ends.
+			if (next.status === "streaming") {
+				_armStreamingWatchdog(sessionId, set, get);
+			} else if ((prev.status as string) === "streaming") {
+				_clearStreamingWatchdog(sessionId);
+			}
 			sessionsById[sessionId] = next;
 		}
 		return { sessionsById };
@@ -179,6 +186,58 @@ function _resetPreparingSessions(set: _SetFn): void {
 			const sess = sessionsById[id];
 			if (sess && sess.status === "preparing") {
 				_clearPrepareTimer(id);
+				sessionsById[id] = { ...sess, status: "idle" };
+				changed = true;
+			}
+		}
+		return changed ? { sessionsById } : {};
+	});
+}
+
+// ─── Streaming watchdog ─────────────────────────────────────────────────────
+//
+// When the client reconnects and the server snapshot says isStreaming=true,
+// the session may have actually stopped mid-stream (zombie connection before
+// reconnection, or server-side timeout). If no session_event arrives within
+// STREAMING_WATCHDOG_MS, we force the status back to idle so the user isn't
+// stuck looking at a frozen "streaming" indicator.
+
+const STREAMING_WATCHDOG_MS = 15_000;
+const _streamingWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
+
+function _clearStreamingWatchdog(sessionId: string): void {
+	const t = _streamingWatchdogs.get(sessionId);
+	if (t !== undefined) {
+		clearTimeout(t);
+		_streamingWatchdogs.delete(sessionId);
+	}
+}
+
+function _armStreamingWatchdog(sessionId: string, set: _SetFn, get: () => StoreState): void {
+	_clearStreamingWatchdog(sessionId);
+	_streamingWatchdogs.set(
+		sessionId,
+		setTimeout(() => {
+			_streamingWatchdogs.delete(sessionId);
+			const cur = get().sessionsById[sessionId];
+			if (!cur || cur.status !== "streaming") return;
+			set((s) => {
+				const c = s.sessionsById[sessionId];
+				if (!c || c.status !== "streaming") return {};
+				return { sessionsById: { ...s.sessionsById, [sessionId]: { ...c, status: "idle" } } };
+			});
+		}, STREAMING_WATCHDOG_MS),
+	);
+}
+
+/** Cancel all streaming watchdogs — called when WS drops. */
+function _resetStreamingWatchdogs(set: _SetFn): void {
+	set((s) => {
+		let changed = false;
+		const sessionsById = { ...s.sessionsById };
+		for (const [id, sess] of Object.entries(sessionsById)) {
+			if (sess && sess.status === "streaming") {
+				_clearStreamingWatchdog(id);
 				sessionsById[id] = { ...sess, status: "idle" };
 				changed = true;
 			}
@@ -506,7 +565,9 @@ export const useStore = create<StoreState>()(
 				set({ wsStatus: status });
 				// A dropped/reconnecting socket may have lost an in-flight prompt
 				// frame; clear any optimistic "preparing" so it doesn't hang.
-				if (status !== "open") _resetPreparingSessions(set as _SetFn);
+				if (status !== "open") {
+					_resetPreparingSessions(set as _SetFn);
+				}
 			});
 			ws.subscribe((frame) => handleFrame(frame, set, get));
 			ws.connect();
@@ -834,6 +895,12 @@ function handleFrame(
 					[frame.sessionId]: initSession(frame.snapshot),
 				},
 			}));
+			// If the server snapshot says it's still streaming, arm a watchdog:
+			// if no events arrive within STREAMING_WATCHDOG_MS, the session
+			// likely stopped mid-stream and we force status back to idle.
+			if (frame.snapshot.isStreaming) {
+				_armStreamingWatchdog(frame.sessionId, set as _SetFn, get);
+			}
 			return;
 
 		case "unsubscribed":
