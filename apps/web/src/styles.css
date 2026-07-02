@@ -328,27 +328,32 @@
 		@apply my-2 max-w-full h-auto rounded-md border border-line bg-paper-2;
 	}
 
-	/* Skill editor — bind @uiw/react-md-editor to deck tokens. */
-	.skill-md-editor .w-md-editor {
-		@apply rounded-md border border-line bg-paper-2 text-ink shadow-none;
-	}
-	.skill-md-editor .w-md-editor-toolbar {
-		@apply border-line bg-paper-3;
-	}
-	.skill-md-editor .w-md-editor-content,
-	.skill-md-editor .w-md-editor-area,
-	.skill-md-editor .w-md-editor-preview {
-		@apply bg-paper-2 text-ink;
-	}
-	.skill-md-editor .w-md-editor-text-pre > code,
-	.skill-md-editor .w-md-editor-text-input {
-		font-family: var(--font-mono);
-		font-size: 0.78rem !important;
-		line-height: 1.55 !important;
-	}
-	.skill-md-editor .wmde-markdown {
+	/* Markdown preview — bind @uiw/react-markdown-preview to deck tokens. */
+	.skill-md-preview.wmde-markdown,
+	.skill-md-preview .wmde-markdown {
 		background: transparent;
 		color: rgb(var(--ink));
+		font-family: var(--font-sans);
+		font-size: 0.94rem;
+		line-height: 1.65;
+	}
+	.skill-md-preview.wmde-markdown pre,
+	.skill-md-preview .wmde-markdown pre {
+		background: rgb(var(--paper-code));
+		border-color: rgb(var(--line));
+	}
+	.skill-md-preview.wmde-markdown code,
+	.skill-md-preview .wmde-markdown code {
+		font-family: var(--font-mono);
+	}
+	.skill-md-preview.wmde-markdown table tr,
+	.skill-md-preview .wmde-markdown table tr,
+	.skill-md-preview.wmde-markdown table td,
+	.skill-md-preview .wmde-markdown table td,
+	.skill-md-preview.wmde-markdown table th,
+	.skill-md-preview .wmde-markdown table th {
+		background: transparent;
+		border-color: rgb(var(--line));
 	}
 }
 

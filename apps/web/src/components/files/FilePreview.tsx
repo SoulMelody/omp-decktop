@@ -5,19 +5,21 @@ import { api } from "@/lib/api";
 import { CodeViewer } from "./renderers/CodeViewer";
 import { ImageViewer } from "./renderers/ImageViewer";
 import { DiffViewer } from "./renderers/DiffViewer";
+import { MarkdownViewer } from "./renderers/MarkdownViewer";
 import { Loader2 } from "lucide-react";
 
-const CODE_EXTS = new Set([
-	"ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "java",
-	"c", "cpp", "h", "hpp", "css", "scss", "less", "html", "htm",
-	"json", "jsonc", "yaml", "yml", "md", "mdx", "sql", "sh", "bash",
-	"ps1", "toml", "xml", "ini", "cfg", "env", "gitignore",
-	"dockerignore", "editorconfig", "Makefile", "Dockerfile",
-	"txt", "log", "csv", "tsv",
-]);
+const CODE_EXTS: Record<string, true> = {
+	ts: true, tsx: true, js: true, jsx: true, mjs: true, cjs: true, py: true, rs: true, go: true, java: true,
+	c: true, cpp: true, h: true, hpp: true, css: true, scss: true, less: true, html: true, htm: true,
+	json: true, jsonc: true, yaml: true, yml: true, sql: true, sh: true, bash: true,
+	ps1: true, toml: true, xml: true, ini: true, cfg: true, env: true, gitignore: true,
+	dockerignore: true, editorconfig: true, Makefile: true, Dockerfile: true,
+	txt: true, log: true, csv: true, tsv: true,
+};
 
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "svg"]);
-const DIFF_EXTS = new Set(["diff", "patch"]);
+const IMAGE_EXTS: Record<string, true> = { png: true, jpg: true, jpeg: true, gif: true, webp: true, bmp: true, ico: true, avif: true, svg: true };
+const DIFF_EXTS: Record<string, true> = { diff: true, patch: true };
+const MARKDOWN_EXTS: Record<string, true> = { md: true, mdx: true };
 
 function getExt(filename: string): string {
 	const dot = filename.lastIndexOf(".");
@@ -71,11 +73,13 @@ export function FilePreview({ tab }: Props) {
 
 	const ext = getExt(tab.label);
 
-	if (IMAGE_EXTS.has(ext))
+	if (IMAGE_EXTS[ext])
 		return <ImageViewer content={data.content} mime={data.mime} fileName={tab.label} />;
-	if (DIFF_EXTS.has(ext))
+	if (DIFF_EXTS[ext])
 		return <DiffViewer content={data.content} fileName={tab.label} />;
-	if (CODE_EXTS.has(ext) || ext === "")
+	if (MARKDOWN_EXTS[ext])
+		return <MarkdownViewer content={data.content} fileName={tab.label} />;
+	if (CODE_EXTS[ext] || ext === "")
 		return <CodeViewer content={data.content} fileName={tab.label} />;
 
 	return (

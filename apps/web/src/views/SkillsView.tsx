@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Link, Loader2, Pencil, Save, Search, Sparkles, Trash2, X } from "lucide-react";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-md-editor/markdown-editor.css";
+import MarkdownPreview from "@uiw/react-markdown-preview";
+import "@uiw/react-markdown-preview/markdown.css";
 import type { ListSkillsResponse, SkillDetailResponse, SkillSummary } from "@omp-deck/protocol";
 
 import { Layout } from "@/components/Layout";
-import { Markdown } from "@/lib/markdown";
 import { skillsApi } from "@/lib/skills-api";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -325,7 +324,7 @@ function SkillDetailPane({
 	const [localError, setLocalError] = useState<string | undefined>();
 	const [deleteConfirm, setDeleteConfirm] = useState(false);
 	const theme = useTheme();
-	const editorColorMode = theme.active === "paper" ? "light" : "dark";
+	const previewColorMode = theme.active === "paper" ? "light" : "dark";
 	const [deleting, setDeleting] = useState(false);
 
 	useEffect(() => {
@@ -485,17 +484,25 @@ function SkillDetailPane({
 			{detail ? (
 				<div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
 					{editing ? (
-						<div className="skill-md-editor" data-color-mode={editorColorMode}>
-							<MDEditor
+						<div className="grid min-h-[520px] gap-3 xl:grid-cols-2">
+							<textarea
 								value={editBody}
-								onChange={(value) => setEditBody(value ?? "")}
-								height={520}
-								preview="live"
-								textareaProps={{ spellCheck: false }}
+								onChange={(e) => setEditBody(e.target.value)}
+								spellCheck={false}
+								className="min-h-[520px] resize-y rounded-md border border-line bg-paper-2 px-3 py-3 font-mono text-xs leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-4 focus:border-accent"
+							/>
+							<MarkdownPreview
+								source={editBody}
+								wrapperElement={{ "data-color-mode": previewColorMode }}
+								className="skill-md-preview min-h-[520px] rounded-md border border-line bg-paper-2 px-4 py-3"
 							/>
 						</div>
 					) : (
-						<Markdown>{detail.body}</Markdown>
+						<MarkdownPreview
+							source={detail.body}
+							wrapperElement={{ "data-color-mode": previewColorMode }}
+							className="skill-md-preview bg-transparent"
+						/>
 					)}
 				</div>
 			) : null}
