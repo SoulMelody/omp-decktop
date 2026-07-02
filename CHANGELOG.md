@@ -5,6 +5,9 @@ All notable changes to omp-deck. The format is loosely based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **StatusBar incorrectly flips from "streaming" back to "ready" mid-turn** whenever the model pauses for more than ~15 seconds (slow generation, rate-limit backoff, network stall, or extended thinking). The deck's streaming-watchdog existed to catch *post-reconnect* zombies (snapshot said `isStreaming=true` but the upstream request actually died before WS reconnect), but it was being re-armed on every event during normal streaming too — so a 15-second lull in the event stream would prematurely reset `session.status` to `"idle"`, which renders as the `"ready"` label. The watchdog now only arms at the reconnect boundary; live events clear it (proving the connection is healthy) and `turn_start` / `turn_end` are the sole authority on whether a turn is in flight. 5 new contract tests on `__test__` in `apps/web/src/lib/store.ts` pin the behavior.
 ## [0.6.1] — 2026-05-29 — In-app update notification
 
 Small follow-up to v0.6.0. Adds a passive update-check pill in the StatusBar so future releases (this one and onward) become discoverable from inside the deck instead of requiring users to run `npm outdated -g`.

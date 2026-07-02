@@ -123,11 +123,22 @@ function _flushBatch(set: _SetFn, get: () => StoreState): void {
 			if (prev.status === "preparing" && next.status !== "preparing") {
 				_clearPrepareTimer(sessionId);
 			}
-			// Streaming watchdog: re-arm on each event for a streaming session
-			// (activity proves the stream is alive), clear when streaming ends.
-			if (next.status === "streaming") {
-				_armStreamingWatchdog(sessionId, set, get);
-			} else if ((prev.status as string) === "streaming") {
+			// Streaming watchdog: the reconnect path (subscribed handler) arms
+			// a 15s watchdog for snapshots that arrive already streaming — if
+			// the server-side request actually died before reconnect, no events
+			// will arrive and the watchdog flips status back to idle. Here we
+			// only need to *clear* that watchdog: any incoming event proves the
+			// stream is live post-reconnect. We deliberately do NOT re-arm on
+			// every event during a normal turn: a legitimate stream started
+			// via `turn_start` is bounded by the SDK's own turn_end, and
+			// re-arming would prematurely flip status to idle if the model
+			// pauses >15s for thinking, rate-limit backoff, or a slow network
+			// (the indicator would falsely report "ready" mid-stream).
+			if ((prev.status as string) === "streaming" && next.status !== "streaming") {
+				_clearStreamingWatchdog(sessionId);
+			} else if (_streamingWatchdogs.has(sessionId)) {
+				// Live event for a session whose watchdog is armed (post-reconnect
+				// snapshot said isStreaming=true). Connection is healthy; disarm.
 				_clearStreamingWatchdog(sessionId);
 			}
 			sessionsById[sessionId] = next;
@@ -912,9 +923,10 @@ function handleFrame(
 					[frame.sessionId]: initSession(frame.snapshot),
 				},
 			}));
-			// If the server snapshot says it's still streaming, arm a watchdog:
-			// if no events arrive within STREAMING_WATCHDOG_MS, the session
-			// likely stopped mid-stream and we force status back to idle.
+			// Post-reconnect backstop: if the server still says isStreaming=true
+			// but no events arrive within STREAMING_WATCHDOG_MS, the upstream
+			// stream likely died before reconnect and we force status back to
+			// idle. The first live session_event after subscribe disarms it.
 			if (frame.snapshot.isStreaming) {
 				_armStreamingWatchdog(frame.sessionId, set as _SetFn, get);
 			}
@@ -1138,3 +1150,27 @@ function armHeartbeatWatchdog(
 // Selectors ────────────────────────────────────────────────────────────────
 export const selectActiveSession = (s: StoreState): SessionUi | undefined =>
 	s.activeId ? s.sessionsById[s.activeId] : undefined;
+
+// ─── Test exports ────────────────────────────────────────────────────────
+// Internal accessors for store-level unit tests. Not part of the public API.
+// These exist so behavior such as the streaming-watchdog contract can be
+// exercised without spinning up a real WebSocket or event controller.
+/** @internal */
+export const __test__ = {
+	streamingWatchdogCount: () => _streamingWatchdogs.size,
+	hasStreamingWatchdog: (sessionId: string) => _streamingWatchdogs.has(sessionId),
+	armStreamingWatchdog: _armStreamingWatchdog,
+	clearStreamingWatchdog: _clearStreamingWatchdog,
+	/**
+	 * Push events into the batch queue and flush synchronously, bypassing the
+	 * rAF/setTimeout scheduling. Used to make tests deterministic.
+	 */
+	enqueueAndFlush(
+		events: Array<{ sessionId: string; event: AgentSessionEventJson }>,
+		set: _SetFn,
+		get: () => StoreState,
+	): void {
+		for (const e of events) _batchQueue.push(e);
+		_flushBatch(set, get);
+	},
+};

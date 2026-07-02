@@ -101,7 +101,6 @@ export function buildFsReadRouter(config: Config): Hono {
 						name: d.name,
 						path: d.isDirectory() ? rel + "/" : rel,
 						isDir: d.isDirectory(),
-						size: d.isFile() ? statSync(resolve(target, d.name)).size : undefined,
 					};
 				})
 				.sort((a, b) => {
