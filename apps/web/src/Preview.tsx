@@ -1,11 +1,11 @@
-/**
- * /preview — static gallery of every tool renderer with mock data.
+﻿/**
+ * /preview 鈥?static gallery of every tool renderer with mock data.
  *
  * Exists so design + highlighting changes can be inspected without firing a
  * real omp turn. Mounted by App.tsx when `?preview=1` is in the URL.
  */
 
-import type { AssistantContentBlock, ToolCallStream } from "@/lib/types";
+import type { AssistantContentBlock, ToolCallStream, SubagentRun } from "@/lib/types";
 import { AssistantMessage } from "./components/messages/AssistantMessage";
 import { UserMessage } from "./components/messages/UserMessage";
 import { ThinkingBlock } from "./components/messages/ThinkingBlock";
@@ -26,6 +26,7 @@ function tcStream(partial: Partial<ToolCallStream> & { id: string; name: string 
 		partialResult: partial.partialResult,
 		result: partial.result,
 		resultContent: partial.resultContent,
+			subagents: partial.subagents,
 	};
 }
 
@@ -103,7 +104,7 @@ const toolCalls: Record<string, ToolCallStream> = {
 		id: "tc-bash",
 		name: "bash",
 		args: { command: "bun run typecheck && bun run --filter '@omp-deck/web' build" },
-		result: { exitCode: 0, output: "tsc -b — OK\nvite v5.4.21 building for production...\n✓ 2081 modules transformed.\n✓ built in 3.44s" },
+		result: { exitCode: 0, output: "tsc -b 鈥?OK\nvite v5.4.21 building for production...\n鉁?2081 modules transformed.\n鉁?built in 3.44s" },
 	}),
 	"tc-search": tcStream({
 		id: "tc-search",
@@ -137,11 +138,30 @@ const toolCalls: Record<string, ToolCallStream> = {
 			],
 		},
 	}),
+	"tc-task-live": tcStream({
+		id: "tc-task-live",
+		name: "task",
+		args: {
+			agent: "orchestrator",
+			tasks: [
+				{ id: "MapTools", description: "Catalog every tool renderer under components/tools/" },
+				{ id: "AuditChrome", description: "Audit chrome/ for inconsistent token usage" },
+				{ id: "IndexDocs", description: "Index docs/ for stale references" },
+				{ id: "Dangling", description: "Find dangling imports" },
+			],
+		},
+		subagents: {
+			MapTools: { id: "MapTools", index: 0, label: "MapTools", description: "Catalog every tool renderer under components/tools/", status: "complete", outputAvailable: true, durationMs: 8400, cost: 0.04, tokens: 1200, requests: 3 } as SubagentRun,
+			AuditChrome: { id: "AuditChrome", index: 1, label: "AuditChrome", description: "Audit chrome/ for inconsistent token usage", status: "running", outputAvailable: false, durationMs: 2100, currentTool: "grep", lastIntent: "Scanning chrome/ for token references" } as SubagentRun,
+			IndexDocs: { id: "IndexDocs", index: 2, label: "IndexDocs", description: "Index docs/ for stale references", status: "queued", outputAvailable: false } as SubagentRun,
+			Dangling: { id: "Dangling", index: 3, label: "Dangling", description: "Find dangling imports", status: "error", outputAvailable: true, durationMs: 1200, cost: 0.01 } as SubagentRun,
+		},
+	}),
 	"tc-web": tcStream({
 		id: "tc-web",
 		name: "web_search",
 		args: { query: "tailwind 3 vs 4 migration", provider: "auto" },
-		result: { content: [{ type: "text", text: "**Top result** — *Tailwind v4 alpha release notes*\nNew Oxide engine, native CSS variables. Breaking: `theme.extend` flattened." }] },
+		result: { content: [{ type: "text", text: "**Top result** 鈥?*Tailwind v4 alpha release notes*\nNew Oxide engine, native CSS variables. Breaking: `theme.extend` flattened." }] },
 	}),
 	"tc-eval-js": tcStream({
 		id: "tc-eval-js",
@@ -254,19 +274,19 @@ export function PreviewPage() {
 					/>
 				</Section>
 
-				<Section title="Thinking — collapsed by default">
+				<Section title="Thinking 鈥?collapsed by default">
 					<ThinkingBlock
 						text={`Reasoning step by step\n1. Plan\n2. Execute\n3. Report\n\n**Sub-plan:** explore, then act.`}
 					/>
 				</Section>
 
 				<Section title="Notices">
-					<Notice msg={{ id: "n1", role: "notice", level: "info", source: "ttsr", message: "Fallback applied: gpt-4o → claude-opus-4-7 (default)", timestamp: NOW }} />
+					<Notice msg={{ id: "n1", role: "notice", level: "info", source: "ttsr", message: "Fallback applied: gpt-4o 鈫?claude-opus-4-7 (default)", timestamp: NOW }} />
 					<Notice msg={{ id: "n2", role: "notice", level: "warning", message: "Auto-compaction starting (context > 80%)", timestamp: NOW }} />
-					<Notice msg={{ id: "n3", role: "notice", level: "error", source: "provider", message: "429 rate limit — backing off 4s", timestamp: NOW }} />
+					<Notice msg={{ id: "n3", role: "notice", level: "error", source: "provider", message: "429 rate limit 鈥?backing off 4s", timestamp: NOW }} />
 				</Section>
 
-				<Section title="Tools — each in its own assistant frame">
+				<Section title="Tools 鈥?each in its own assistant frame">
 					{(
 						[
 							["tc-read", "read"],
@@ -276,6 +296,7 @@ export function PreviewPage() {
 							["tc-search", "search"],
 							["tc-lsp", "lsp"],
 							["tc-task", "task"],
+							["tc-task-live", "task"],
 							["tc-web", "web_search"],
 							["tc-eval-js", "eval"],
 							["tc-todo", "todo_write"],

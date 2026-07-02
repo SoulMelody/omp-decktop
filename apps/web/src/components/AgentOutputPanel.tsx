@@ -3,16 +3,36 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCost, formatDurationMs } from "@/lib/utils";
 
 interface AgentOutputPanelProps {
 	sessionId: string;
 	agentId: string;
 	open: boolean;
 	onClose: () => void;
+	status?: string;
+	description?: string;
+	durationMs?: number;
+	cost?: number;
 }
 
-export function AgentOutputPanel({ sessionId, agentId, open, onClose }: AgentOutputPanelProps) {
+function classifyAgentOutputError(message: string): string {
+	if (message.includes("Invalid agentId")) return "Invalid agent id. The output path was rejected.";
+	if (message.includes("Session not found or not active")) return "Session is not active, so this output cannot be loaded from the current artifact API.";
+	if (message.includes("Agent output not found")) return "Agent output artifact is not available yet.";
+	return message;
+}
+
+export function AgentOutputPanel({
+	sessionId,
+	agentId,
+	open,
+	onClose,
+	status,
+	description,
+	durationMs,
+	cost,
+}: AgentOutputPanelProps) {
 	const [content, setContent] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -32,7 +52,7 @@ export function AgentOutputPanel({ sessionId, agentId, open, onClose }: AgentOut
 			const text = await res.text();
 			setContent(text);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Unknown error");
+			setError(err instanceof Error ? classifyAgentOutputError(err.message) : "Unknown error");
 			setContent(null);
 		} finally {
 			setLoading(false);
@@ -63,6 +83,12 @@ export function AgentOutputPanel({ sessionId, agentId, open, onClose }: AgentOut
 				<div className="font-mono text-sm">
 					<span className="text-ink-3">agent://</span>
 					<span className="text-accent">{agentId}</span>
+					<div className="mt-1 flex flex-wrap gap-2 font-mono text-2xs text-ink-4">
+						{status ? <span>{status}</span> : null}
+						{durationMs != null ? <span>{formatDurationMs(durationMs)}</span> : null}
+						{cost != null ? <span>{formatCost(cost)}</span> : null}
+					</div>
+					{description ? <div className="mt-1 text-xs text-ink-3">{description}</div> : null}
 				</div>
 				<button
 					type="button"

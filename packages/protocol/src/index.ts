@@ -880,6 +880,60 @@ export type AgentMessageJson = Record<string, unknown> & {
 	content: unknown;
 };
 
+export type SubagentRunStatusWire = "queued" | "running" | "complete" | "error" | "aborted";
+
+export interface SubagentProgressWire {
+	id: string;
+	index?: number;
+	agent?: string;
+	agentSource?: string;
+	status?: SubagentRunStatusWire;
+	task?: string;
+	assignment?: string;
+	description?: string;
+	durationMs?: number;
+	cost?: number;
+	tokens?: number;
+	requests?: number;
+	currentTool?: string;
+	lastIntent?: string;
+	recentOutput?: string[];
+}
+
+export interface SubagentLifecyclePayloadWire {
+	id: string;
+	index: number;
+	agent: string;
+	agentSource?: string;
+	description?: string;
+	status: "started" | "completed" | "failed" | "aborted";
+	sessionFile?: string;
+	parentToolCallId?: string;
+	detached?: boolean;
+}
+
+export interface SubagentProgressPayloadWire {
+	index: number;
+	agent: string;
+	agentSource?: string;
+	task?: string;
+	assignment?: string;
+	parentToolCallId?: string;
+	sessionFile?: string;
+	detached?: boolean;
+	progress: SubagentProgressWire;
+}
+
+export type SubagentLifecycleEventJson = Record<string, unknown> & {
+	type: "subagent_lifecycle";
+	payload: SubagentLifecyclePayloadWire;
+};
+
+export type SubagentProgressEventJson = Record<string, unknown> & {
+	type: "subagent_progress";
+	payload: SubagentProgressPayloadWire;
+};
+
 /** Sanitized SDK event — passthrough of AgentSessionEvent. */
 export type AgentSessionEventJson = Record<string, unknown> & {
 	type: string;

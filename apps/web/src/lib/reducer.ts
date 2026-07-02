@@ -16,6 +16,8 @@ import type {
 	NoticeMsg,
 	QueuedPrompt,
 	SessionUi,
+	SubagentRun,
+	SubagentRunStatus,
 	TextBlock,
 	ToolCallStream,
 	TodoPhase,
@@ -113,7 +115,7 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 		case "message_start": {
 			const msg = (event as any).message;
 			if (!msg) return state;
-			const next = { ...state, messages: state.messages.slice() };
+			const next = { ...state, messages: state.messages.slice(), toolCalls: { ...state.toolCalls } };
 			ingestMessage(next, msg);
 			return next;
 		}
@@ -180,6 +182,10 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 					};
 			return { ...state, toolCalls: { ...state.toolCalls, [id]: next } };
 		}
+		case "subagent_lifecycle":
+			return applySubagentLifecycle(state, event as any);
+		case "subagent_progress":
+			return applySubagentProgress(state, event as any);
 
 		// ─── Todos ─────────────────────────────────────────────────────────
 		case "todo_reminder": {
@@ -386,6 +392,152 @@ function pushNotice(state: SessionUi, p: Omit<NoticeMsg, "id" | "role" | "timest
 			},
 		],
 	};
+}
+
+function mapLifecycleStatus(status: unknown): SubagentRunStatus {
+	switch (status) {
+		case "started":
+			return "running";
+		case "completed":
+			return "complete";
+		case "failed":
+			return "error";
+		case "aborted":
+			return "aborted";
+		default:
+			return "queued";
+	}
+}
+
+function mapProgressStatus(status: unknown): SubagentRunStatus | undefined {
+	switch (status) {
+		case "pending":
+			return "queued";
+		case "running":
+			return "running";
+		case "completed":
+			return "complete";
+		case "failed":
+			return "error";
+		case "aborted":
+			return "aborted";
+		default:
+			return undefined;
+	}
+}
+
+function patchSubagent(
+	state: SessionUi,
+	parentToolCallId: unknown,
+	subagentId: unknown,
+	patcher: (existing: SubagentRun | undefined, parent: ToolCallStream) => SubagentRun,
+): SessionUi {
+	const parentId = typeof parentToolCallId === "string" ? parentToolCallId : "";
+	const id = typeof subagentId === "string" ? subagentId : "";
+	if (!parentId || !id) return state;
+	const parent = state.toolCalls[parentId];
+	if (!parent) return state;
+
+	const nextRun = patcher(parent.subagents?.[id], parent);
+	return {
+		...state,
+		toolCalls: {
+			...state.toolCalls,
+			[parentId]: {
+				...parent,
+				subagents: {
+					...parent.subagents,
+					[id]: nextRun,
+				},
+			},
+		},
+	};
+}
+
+function applySubagentLifecycle(state: SessionUi, event: any): SessionUi {
+	return patchSubagent(state, event.parentToolCallId, event.subagentId, (existing, parent) => {
+		const id = String(event.subagentId);
+		const task = taskConfigFor(parent, id, event.index);
+		const status = mapLifecycleStatus(event.status);
+		const isTerminal = status === "complete" || status === "error" || status === "aborted";
+		const now = Date.now();
+		return {
+			id,
+			index: numberOr(event.index, existing?.index ?? task.index ?? 0),
+			label: stringOr(event.label, existing?.label) ?? id,
+			description: stringOr(event.description, existing?.description ?? task.description),
+			agent: stringOr(event.agent, existing?.agent ?? task.agent),
+			agentSource: stringOr(event.agentSource, existing?.agentSource),
+			status,
+			durationMs: numberOrUndefined(event.durationMs, existing?.durationMs),
+			cost: numberOrUndefined(event.cost, existing?.cost),
+			tokens: numberOrUndefined(event.tokens, existing?.tokens),
+			requests: numberOrUndefined(event.requests, existing?.requests),
+			currentTool: stringOr(event.currentTool, existing?.currentTool),
+			lastIntent: stringOr(event.lastIntent, existing?.lastIntent),
+			recentOutput: stringArrayOr(event.recentOutput, existing?.recentOutput),
+			outputAvailable: isTerminal ? true : existing?.outputAvailable ?? false,
+			sessionFile: stringOr(event.sessionFile, existing?.sessionFile),
+			startedAt: existing?.startedAt ?? (status === "running" ? now : undefined),
+			completedAt: isTerminal ? now : existing?.completedAt,
+		};
+	});
+}
+
+function applySubagentProgress(state: SessionUi, event: any): SessionUi {
+	return patchSubagent(state, event.parentToolCallId, event.subagentId, (existing, parent) => {
+		const id = String(event.subagentId);
+		const task = taskConfigFor(parent, id, event.index);
+		return {
+			id,
+			index: numberOr(event.index, existing?.index ?? task.index ?? 0),
+			label: stringOr(event.label, existing?.label) ?? id,
+			description: stringOr(event.description, existing?.description ?? task.description),
+			agent: stringOr(event.agent, existing?.agent ?? task.agent),
+			agentSource: stringOr(event.agentSource, existing?.agentSource),
+			status: mapProgressStatus(event.status) ?? existing?.status ?? "running",
+			durationMs: numberOrUndefined(event.durationMs, existing?.durationMs),
+			cost: numberOrUndefined(event.cost, existing?.cost),
+			tokens: numberOrUndefined(event.tokens, existing?.tokens),
+			requests: numberOrUndefined(event.requests, existing?.requests),
+			currentTool: stringOr(event.currentTool, existing?.currentTool),
+			lastIntent: stringOr(event.lastIntent, existing?.lastIntent),
+			recentOutput: stringArrayOr(event.recentOutput, existing?.recentOutput),
+			outputAvailable: existing?.outputAvailable ?? false,
+			sessionFile: stringOr(event.sessionFile, existing?.sessionFile),
+			startedAt: existing?.startedAt ?? Date.now(),
+			completedAt: existing?.completedAt,
+		};
+	});
+}
+
+function taskConfigFor(parent: ToolCallStream, subagentId: string, eventIndex: unknown) {
+	const tasks = Array.isArray(parent.args?.tasks) ? (parent.args.tasks as any[]) : [];
+	const index = typeof eventIndex === "number"
+		? eventIndex
+		: tasks.findIndex((task) => task?.id === subagentId);
+	const task = index >= 0 ? tasks[index] : tasks.find((candidate) => candidate?.id === subagentId);
+	return {
+		index: index >= 0 ? index : undefined,
+		description: typeof task?.description === "string" ? task.description : undefined,
+		agent: typeof parent.args?.agent === "string" ? parent.args.agent : undefined,
+	};
+}
+
+function stringOr(value: unknown, fallback: string | undefined): string | undefined {
+	return typeof value === "string" ? value : fallback;
+}
+
+function numberOr(value: unknown, fallback: number): number {
+	return typeof value === "number" ? value : fallback;
+}
+
+function numberOrUndefined(value: unknown, fallback: number | undefined): number | undefined {
+	return typeof value === "number" ? value : fallback;
+}
+
+function stringArrayOr(value: unknown, fallback: string[] | undefined): string[] | undefined {
+	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
 }
 
 function ingestMessage(state: SessionUi, msg: any): void {

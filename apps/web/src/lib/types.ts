@@ -139,6 +139,29 @@ export interface QueuedPrompt {
 
 // ─── Tool call lifecycle ───────────────────────────────────────────────────
 
+export type SubagentRunStatus = "queued" | "running" | "complete" | "error" | "aborted";
+
+export interface SubagentRun {
+	id: string;
+	index: number;
+	label: string;
+	description?: string;
+	agent?: string;
+	agentSource?: string;
+	status: SubagentRunStatus;
+	durationMs?: number;
+	cost?: number;
+	tokens?: number;
+	requests?: number;
+	currentTool?: string;
+	lastIntent?: string;
+	recentOutput?: string[];
+	outputAvailable: boolean;
+	sessionFile?: string;
+	startedAt?: number;
+	completedAt?: number;
+}
+
 export interface ToolCallStream {
 	id: string;
 	name: string;
@@ -150,6 +173,7 @@ export interface ToolCallStream {
 	isError: boolean;
 	startedAt: number;
 	endedAt?: number;
+	subagents?: Record<string, SubagentRun>;
 	/** Set when a paired tool_result message arrives. Mirrors result content for compatibility. */
 	resultContent?: Array<TextBlock | ImageBlock>;
 }

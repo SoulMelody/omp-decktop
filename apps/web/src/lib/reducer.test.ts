@@ -253,3 +253,111 @@ describe("reducer session_replaced event", () => {
 		expect(applyEvent(s, { type: "session_replaced" } as never)).toBe(s);
 	});
 });
+
+describe("reducer subagent task events", () => {
+	function withTaskTool(): SessionUi {
+		return applyEvent(fresh(), {
+			type: "tool_execution_start",
+			toolCallId: "tool-task-1",
+			toolName: "task",
+			args: {
+				agent: "explore",
+				tasks: [{ id: "MapTools", description: "Map tool renderers" }],
+			},
+		} as never);
+	}
+
+	test("subagent_lifecycle started creates a running subagent run", () => {
+		const s = applyEvent(withTaskTool(), {
+			type: "subagent_lifecycle",
+			parentToolCallId: "tool-task-1",
+			subagentId: "MapTools",
+			index: 0,
+			label: "MapTools",
+			agent: "explore",
+			description: "Map tool renderers",
+			status: "started",
+			sessionFile: "/tmp/subagent.jsonl",
+		} as never);
+
+		expect(s.toolCalls["tool-task-1"]?.subagents?.MapTools).toMatchObject({
+			id: "MapTools",
+			index: 0,
+			label: "MapTools",
+			agent: "explore",
+			description: "Map tool renderers",
+			status: "running",
+			outputAvailable: false,
+			sessionFile: "/tmp/subagent.jsonl",
+		});
+	});
+
+	test("subagent_progress merges metrics into an existing run", () => {
+		let s = applyEvent(withTaskTool(), {
+			type: "subagent_lifecycle",
+			parentToolCallId: "tool-task-1",
+			subagentId: "MapTools",
+			index: 0,
+			label: "MapTools",
+			status: "started",
+		} as never);
+
+		s = applyEvent(s, {
+			type: "subagent_progress",
+			parentToolCallId: "tool-task-1",
+			subagentId: "MapTools",
+			status: "running",
+			durationMs: 1234,
+			cost: 0.42,
+			requests: 3,
+			tokens: 456,
+			currentTool: "grep",
+			recentOutput: ["checking files", "found renderer"],
+		} as never);
+
+		expect(s.toolCalls["tool-task-1"]?.subagents?.MapTools).toMatchObject({
+			status: "running",
+			durationMs: 1234,
+			cost: 0.42,
+			requests: 3,
+			tokens: 456,
+			currentTool: "grep",
+			recentOutput: ["checking files", "found renderer"],
+		});
+	});
+
+	test("terminal subagent_lifecycle completed marks output available", () => {
+		let s = applyEvent(withTaskTool(), {
+			type: "subagent_lifecycle",
+			parentToolCallId: "tool-task-1",
+			subagentId: "MapTools",
+			index: 0,
+			status: "started",
+		} as never);
+
+		s = applyEvent(s, {
+			type: "subagent_lifecycle",
+			parentToolCallId: "tool-task-1",
+			subagentId: "MapTools",
+			status: "completed",
+		} as never);
+
+		expect(s.toolCalls["tool-task-1"]?.subagents?.MapTools).toMatchObject({
+			status: "complete",
+			outputAvailable: true,
+		});
+		expect(s.toolCalls["tool-task-1"]?.subagents?.MapTools.completedAt).toBeNumber();
+	});
+
+	test("missing parent tool call is a no-op", () => {
+		const s = withTaskTool();
+		const next = applyEvent(s, {
+			type: "subagent_lifecycle",
+			parentToolCallId: "missing-tool",
+			subagentId: "MapTools",
+			status: "started",
+		} as never);
+
+		expect(next).toBe(s);
+	});
+});
