@@ -303,8 +303,8 @@ export function buildRouter(
 	app.route("/", buildInboxRouter());
 	app.route("/", buildUtilityRouter());
 	app.route("/", buildSlashCommandsRouter());
-	app.route("/", buildFsRouter());
-app.route("/", buildFsReadRouter());
+	app.route("/", buildFsRouter(config));
+	app.route("/", buildFsReadRouter(config));
 	app.route("/", buildSettingsRouter(bridge, config, opts));
 	app.route("/", buildOrientationRouter());
 	app.route("/", buildBridgesRouter(supervisor));

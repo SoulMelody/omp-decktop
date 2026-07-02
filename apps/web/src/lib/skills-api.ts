@@ -1,4 +1,14 @@
-import type { ListSkillsResponse, SkillDetailResponse } from "@omp-deck/protocol";
+import type {
+	CreateSkillRequest,
+	CreateSkillResponse,
+	DeleteSkillResponse,
+	InstallSkillFromUrlRequest,
+	InstallSkillFromUrlResponse,
+	ListSkillsResponse,
+	SkillDetailResponse,
+	UpdateSkillRequest,
+	UpdateSkillResponse,
+} from "@omp-deck/protocol";
 
 const BASE = "/api";
 
@@ -25,9 +35,29 @@ export const skillsApi = {
 		return req<ListSkillsResponse>(withCwd("/skills", cwd));
 	},
 	detail(id: string, cwd?: string): Promise<SkillDetailResponse> {
-		// `id` is server-issued (base64url of the SKILL.md path). Clients
-		// pass it back opaquely; the server validates that the decoded path
-		// was actually returned by loadCapability before reading.
 		return req<SkillDetailResponse>(withCwd(`/skills/${encodeURIComponent(id)}`, cwd));
+	},
+	create(body: CreateSkillRequest): Promise<CreateSkillResponse> {
+		return req<CreateSkillResponse>("/skills", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+	},
+	update(id: string, body: UpdateSkillRequest): Promise<UpdateSkillResponse> {
+		return req<UpdateSkillResponse>(`/skills/${encodeURIComponent(id)}`, {
+			method: "PUT",
+			body: JSON.stringify(body),
+		});
+	},
+	deleteSkill(id: string, cwd?: string): Promise<DeleteSkillResponse> {
+		return req<DeleteSkillResponse>(withCwd(`/skills/${encodeURIComponent(id)}`, cwd), {
+			method: "DELETE",
+		});
+	},
+	installFromUrl(body: InstallSkillFromUrlRequest): Promise<InstallSkillFromUrlResponse> {
+		return req<InstallSkillFromUrlResponse>("/skills/install", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
 	},
 };

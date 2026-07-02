@@ -1,18 +1,37 @@
 import { selectActiveSession, useStore } from "@/lib/store";
+import type { SessionUi } from "@/lib/types";
 import { UpdatePill } from "./UpdatePill";
 import { cn, formatTokens } from "@/lib/utils";
 
-const STATUS_TONE: Record<string, string> = {
+type SessionBarStatus = SessionUi["status"] | "queued";
+
+const STATUS_TONE: Record<SessionBarStatus, string> = {
 	idle: "text-ink-3",
 	preparing: "text-thinking",
 	streaming: "text-accent",
 	compacting: "text-warn",
 	retrying: "text-warn",
+	queued: "text-thinking",
 };
+
+export function getSessionBarStatus(session: SessionUi): SessionBarStatus {
+	if (session.status !== "idle") return session.status;
+
+	const lastMessage = session.messages[session.messages.length - 1];
+	const tailIsLiveAssistant =
+		lastMessage != null && lastMessage.role === "assistant" && lastMessage.isStreaming === true;
+	const anyToolRunning = Object.values(session.toolCalls).some((toolCall) => toolCall.status === "running");
+	if (tailIsLiveAssistant || anyToolRunning) return "streaming";
+
+	if (session.queuedPrompts.length > 0) return "queued";
+
+	return "idle";
+}
 
 export function StatusBar() {
 	const wsStatus = useStore((s) => s.wsStatus);
 	const session = useStore(selectActiveSession);
+	const sessionStatus = session ? getSessionBarStatus(session) : null;
 
 	const wsTone =
 		wsStatus === "open"
@@ -30,8 +49,8 @@ export function StatusBar() {
 			{session ? (
 				<>
 					<span className="text-ink-4">·</span>
-					<span className={STATUS_TONE[session.status] ?? "text-ink-3"}>
-						{session.status === "idle" ? "ready" : session.status}
+					<span className={sessionStatus ? STATUS_TONE[sessionStatus] : "text-ink-3"}>
+						{sessionStatus === "idle" || sessionStatus == null ? "ready" : sessionStatus === "queued" ? session.queuedPrompts.length > 1 ? `queued·${session.queuedPrompts.length}` : "queued" : sessionStatus}
 					</span>
 					{session.retry ? (
 						<>

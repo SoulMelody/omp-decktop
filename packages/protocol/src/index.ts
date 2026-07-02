@@ -798,11 +798,73 @@ export interface SkillFile {
 
 /**
  * Single-skill detail. `body` is the SKILL.md content with the frontmatter
- * block stripped; consumers re-render with the chat markdown pipeline.
+ * block stripped; `rawContent` is the verbatim file content on disk for the
+ * native-skill editor.
  */
 export interface SkillDetailResponse extends SkillSummary {
 	body: string;
+	rawContent: string;
 	files: SkillFile[];
+}
+
+// ─── Skill mutations (create, edit, install-from-URL, delete) ──────────────
+
+/** Body for POST /api/skills — create a new native skill. */
+export interface CreateSkillRequest {
+	/** Directory name under the skill root (slug). Required. */
+	dirName: string;
+	/** Full SKILL.md body including frontmatter. Required. */
+	body: string;
+	/** Target scope. Defaults to "user" if omitted. */
+	scope?: "user" | "project";
+	/** Optional project cwd for project-scope writes. */
+	cwd?: string;
+}
+
+/** Response for POST /api/skills. */
+export interface CreateSkillResponse {
+	/** Server-issued id of the new skill (base64url of SKILL.md path). */
+	id: string;
+	/** Absolute path to the created SKILL.md. */
+	skillPath: string;
+}
+
+/** Body for PUT /api/skills/:id — edit a native skill's SKILL.md. */
+export interface UpdateSkillRequest {
+	/** Full new SKILL.md body including frontmatter. Required. */
+	body: string;
+	/** Optional project cwd for project-scope resolution. */
+	cwd?: string;
+}
+
+/** Response for PUT /api/skills/:id. */
+export interface UpdateSkillResponse {
+	id: string;
+	skillPath: string;
+}
+
+/** Body for POST /api/skills/install — install a skill from a URL. */
+export interface InstallSkillFromUrlRequest {
+	/** GitHub blob URL, GitHub raw URL, or direct raw SKILL.md URL. Required. */
+	url: string;
+	/** Target scope. Defaults to "user". */
+	scope?: "user" | "project";
+	/** Optional project cwd for project-scope writes. */
+	cwd?: string;
+}
+
+/** Response for POST /api/skills/install. */
+export interface InstallSkillFromUrlResponse {
+	id: string;
+	skillPath: string;
+	dirName: string;
+}
+
+/** Response for DELETE /api/skills/:id. */
+export interface DeleteSkillResponse {
+	id: string;
+	skillPath: string;
+	dirName: string;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 // WebSocket frames

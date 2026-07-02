@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { readFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { resolve, relative, sep, isAbsolute } from "node:path";
+import type { Config } from "./config.ts";
+import { isCwdAllowed } from "./fs-allow.ts";
 import { logger } from "./log.ts";
 
 const log = logger("fs-read");
@@ -41,31 +43,15 @@ function isTextFile(ext: string): boolean { return TEXT_EXTS.has(ext) || ext ===
 function isImageFile(ext: string): boolean { return IMAGE_EXTS.has(ext); }
 function isPreviewable(ext: string): boolean { return isTextFile(ext) || isImageFile(ext); }
 
-function isCwdAllowed(cwd: string): boolean {
-	// Only allow cwds under the user's home directory. The deck is loopback-
-	// only, but a buggy client shouldn't be able to probe system dirs.
-	const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-	if (!home) return false;
-	try {
-		const resolved = resolve(cwd);
-		const homeResolved = resolve(home);
-		const rel = relative(homeResolved, resolved);
-		if (rel.startsWith("..") || isAbsolute(rel)) return false;
-		// Reject if cwd doesn't actually exist on disk — fail closed.
-		return existsSync(resolved) && statSync(resolved).isDirectory();
-	} catch {
-		return false;
-	}
-}
-
-export function buildFsReadRouter(): Hono {
+export function buildFsReadRouter(config: Config): Hono {
 	const app = new Hono();
+	const allowedRoots = [config.defaultCwd, ...config.extraWorkspaces];
 
 	app.get("/fs/read", (c) => {
 		const cwd = c.req.query("cwd");
 		const path = c.req.query("path");
 		if (!cwd || !path) return c.json({ ok: false, error: "missing cwd or path" }, 400);
-		if (!isCwdAllowed(cwd)) return c.json({ ok: false, error: "cwd not allowed" }, 403);
+		if (!isCwdAllowed(cwd, allowedRoots)) return c.json({ ok: false, error: "cwd not allowed" }, 403);
 
 		const resolved = resolve(cwd, path);
 		if (!resolved.startsWith(resolve(cwd) + sep) && resolved !== resolve(cwd))
@@ -99,7 +85,7 @@ export function buildFsReadRouter(): Hono {
 		const cwd = c.req.query("cwd");
 		const rawPath = c.req.query("path") ?? "";
 		if (!cwd) return c.json({ ok: false, error: "missing cwd" }, 400);
-		if (!isCwdAllowed(cwd)) return c.json({ ok: false, error: "cwd not allowed" }, 403);
+		if (!isCwdAllowed(cwd, allowedRoots)) return c.json({ ok: false, error: "cwd not allowed" }, 403);
 
 		const target = resolve(cwd, rawPath);
 		if (!target.startsWith(resolve(cwd) + sep) && target !== resolve(cwd))

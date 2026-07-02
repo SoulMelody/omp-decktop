@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 type Editing = {
 	name: string;
 	config: McpServerConfigWire;
+	envEntries: [string, string][];
 	isNew: boolean;
 	originalName?: string;
 };
@@ -39,6 +40,21 @@ const EMPTY_CONFIG: McpServerConfigWire = {
 	args: [],
 	env: {},
 };
+
+// Project an entries list into the persisted config.env shape:
+// drop empties and keep the last occurrence when keys collide.
+function entriesToEnv(entries: [string, string][]): Record<string, string> {
+	const env: Record<string, string> = {};
+	for (const [k, v] of entries) {
+		const key = k.trim();
+		if (key) env[key] = v;
+	}
+	return env;
+}
+
+function configEnvToEntries(config: McpServerConfigWire): [string, string][] {
+	return Object.entries(config.env ?? {});
+}
 
 export function IntegrationsView() {
 	const [servers, setServers] = useState<McpServerEntry[]>([]);
@@ -68,54 +84,64 @@ export function IntegrationsView() {
 		void refresh();
 	}, [refresh]);
 
-	const selectedServer = selected
-		? servers.find((s) => s.name === selected)
-		: undefined;
+const selectedServer = selected
+	? servers.find((s) => s.name === selected)
+	: undefined;
 
-	function startEdit(server: McpServerEntry): void {
-		setSelected(server.name);
-		setEditing({
-			name: server.name,
-			config: { ...server.config },
-			isNew: false,
-			originalName: server.name,
-		});
-		setTestResult(null);
-	}
+function startEdit(server: McpServerEntry): void {
+	setSelected(server.name);
+	setEditing({
+		name: server.name,
+		config: { ...server.config },
+		envEntries: configEnvToEntries(server.config),
+		isNew: false,
+		originalName: server.name,
+	});
+	setTestResult(null);
+}
 
-	function startNew(): void {
-		const name = "new-server";
-		setSelected(null);
-		setEditing({ name, config: { ...EMPTY_CONFIG }, isNew: true });
-		setTestResult(null);
-	}
+function startNew(): void {
+	const name = "new-server";
+	setSelected(null);
+	setEditing({
+		name,
+		config: { ...EMPTY_CONFIG },
+		envEntries: [],
+		isNew: true,
+	});
+	setTestResult(null);
+}
 
-	function cancelEdit(): void {
-		setEditing(null);
-		if (!selected) setSelected(null);
-	}
+function cancelEdit(): void {
+	setEditing(null);
+	if (!selected) setSelected(null);
+}
 
-	async function handleSave(): Promise<void> {
-		if (!editing) return;
-		setSaving(true);
-		try {
-			if (editing.isNew) {
-				await api.addMcpServer({ name: editing.name, config: editing.config });
-			} else {
-				await api.updateMcpServer(editing.originalName!, {
-					name: editing.name !== editing.originalName ? editing.name : undefined,
-					config: editing.config,
-				});
-			}
-			setEditing(null);
-			void refresh();
-		} catch (err) {
-			console.error("save failed", err);
-			alert(`Save failed: ${String(err)}`);
-		} finally {
-			setSaving(false);
+async function handleSave(): Promise<void> {
+	if (!editing) return;
+	setSaving(true);
+	try {
+		const finalConfig: McpServerConfigWire = {
+			...editing.config,
+			env: entriesToEnv(editing.envEntries),
+		};
+		if (editing.isNew) {
+			await api.addMcpServer({ name: editing.name, config: finalConfig });
+		} else {
+			await api.updateMcpServer(editing.originalName!, {
+				name: editing.name !== editing.originalName ? editing.name : undefined,
+				config: finalConfig,
+			});
 		}
+		setEditing(null);
+		void refresh();
+	} catch (err) {
+		console.error("save failed", err);
+		alert(`Save failed: ${String(err)}`);
+	} finally {
+		setSaving(false);
 	}
+}
 
 	async function handleDelete(name: string): Promise<void> {
 		if (!confirm(`Delete MCP server "${name}"?`)) return;
@@ -153,49 +179,49 @@ export function IntegrationsView() {
 		}
 	}
 
-	function handleImport(): void {
-		try {
-			const parsed = JSON.parse(importJson);
-			if (!editing) return;
-			setEditing({
-				...editing,
-				config: {
-					type: (parsed.type as McpServerConfigWire["type"]) ?? editing.config.type,
-					command: typeof parsed.command === "string" ? parsed.command : editing.config.command,
-					args: Array.isArray(parsed.args) ? parsed.args : editing.config.args,
-					env: parsed.env && typeof parsed.env === "object" ? parsed.env : editing.config.env,
-					url: typeof parsed.url === "string" ? parsed.url : editing.config.url,
-					headers: parsed.headers && typeof parsed.headers === "object" ? parsed.headers : editing.config.headers,
-					cwd: typeof parsed.cwd === "string" ? parsed.cwd : editing.config.cwd,
-					timeout: typeof parsed.timeout === "number" ? parsed.timeout : editing.config.timeout,
-				},
-			});
-		} catch {
-			alert("Invalid JSON");
-		}
-		setShowImport(false);
-		setImportJson("");
-	}
-
-	function updateConfig<K extends keyof McpServerConfigWire>(
-		key: K,
-		value: McpServerConfigWire[K],
-	): void {
+function handleImport(): void {
+	try {
+		const parsed = JSON.parse(importJson);
 		if (!editing) return;
-		setEditing({ ...editing, config: { ...editing.config, [key]: value } });
+		const nextConfig: McpServerConfigWire = {
+			...editing.config,
+			type: (parsed.type as McpServerConfigWire["type"]) ?? editing.config.type,
+			command: typeof parsed.command === "string" ? parsed.command : editing.config.command,
+			args: Array.isArray(parsed.args) ? parsed.args : editing.config.args,
+			env: parsed.env && typeof parsed.env === "object" ? parsed.env : editing.config.env,
+			url: typeof parsed.url === "string" ? parsed.url : editing.config.url,
+			headers: parsed.headers && typeof parsed.headers === "object" ? parsed.headers : editing.config.headers,
+			cwd: typeof parsed.cwd === "string" ? parsed.cwd : editing.config.cwd,
+			timeout: typeof parsed.timeout === "number" ? parsed.timeout : editing.config.timeout,
+		};
+		const nextEntries =
+			parsed.env && typeof parsed.env === "object"
+				? Object.entries(parsed.env as Record<string, string>)
+				: editing.envEntries;
+		setEditing({
+			...editing,
+			config: nextConfig,
+			envEntries: nextEntries,
+		});
+	} catch {
+		alert("Invalid JSON");
 	}
+	setShowImport(false);
+	setImportJson("");
+}
 
-	// Build env entries array for editing
-	const envEntries: [string, string][] = Object.entries(editing?.config.env ?? {});
+function updateConfig<K extends keyof McpServerConfigWire>(
+	key: K,
+	value: McpServerConfigWire[K],
+): void {
+	if (!editing) return;
+	setEditing({ ...editing, config: { ...editing.config, [key]: value } });
+}
 
-	function setEnvEntries(entries: [string, string][]): void {
-		if (!editing) return;
-		const env: Record<string, string> = {};
-		for (const [k, v] of entries) {
-			if (k.trim()) env[k.trim()] = v;
-		}
-		updateConfig("env", env);
-	}
+function setEnvEntries(entries: [string, string][]): void {
+	if (!editing) return;
+	setEditing({ ...editing, envEntries: entries });
+}
 
 	// Build args array for editing
 	const argsStr = (editing?.config.args ?? []).join("\n");
@@ -467,7 +493,7 @@ function EditForm({
 	onImportSubmit: () => void;
 }) {
 	const isNew = editing.isNew;
-	const envEntries: [string, string][] = Object.entries(editing.config.env ?? {});
+	const envEntries = editing.envEntries;
 	const argsStr = (editing.config.args ?? []).join("\n");
 
 	return (

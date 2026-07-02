@@ -4,23 +4,12 @@ import * as path from "node:path";
 
 import type { FilePathMatch, ListFilePathsResponse } from "@omp-deck/protocol";
 
+import type { Config } from "./config.ts";
+import { isCwdAllowed } from "./fs-allow.ts";
 import { logger } from "./log.ts";
-
 const log = logger("fs-complete");
 
-/**
- * `GET /api/fs/complete?cwd=<absolute>&q=<>&limit=<>` enumerates file paths
- * under `cwd`, fuzzy-scored against `q`, capped at `limit` (default 20).
- *
- * Used by the composer's `@filepath` autocomplete dropdown. The picker calls
- * this on every keystroke after the `@` token, so the underlying file
- * inventory is cached per-cwd for 30 s; only the scoring runs per request.
- *
- * Honors `.gitignore` when `cwd` is a git work tree by shelling out to
- * `git ls-files --cached --others --exclude-standard`. Falls back to a manual
- * walk that skips well-known build/dependency directories otherwise.
- */
-export function buildFsRouter(): Hono {
+export function buildFsRouter(config: Config): Hono {
 	const app = new Hono();
 
 	app.get("/fs/complete", async (c) => {
@@ -35,7 +24,7 @@ export function buildFsRouter(): Hono {
 		// workspace root — loopback-only is the *transport*, not the
 		// authorization. A bug in another route shouldn't let the picker walk
 		// `C:\Windows`.
-		if (!isCwdAllowed(cwd)) {
+		if (!isCwdAllowed(cwd, [config.defaultCwd, ...config.extraWorkspaces])) {
 			return c.json({ error: "cwd is not under an allowed root" }, 403);
 		}
 
@@ -231,25 +220,6 @@ function score(entries: InventoryEntry[], rawQ: string, limit: number): Inventor
 		return a.e.path.localeCompare(b.e.path);
 	});
 	return scored.slice(0, limit).map((s) => s.e);
-}
-
-// ─── Sandboxing ────────────────────────────────────────────────────────────
-
-function isCwdAllowed(cwd: string): boolean {
-	// Only allow cwds under the user's home directory. The deck is loopback-
-	// only, but a buggy client shouldn't be able to probe `C:\Windows\System32`.
-	const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-	if (!home) return false;
-	try {
-		const resolved = path.resolve(cwd);
-		const homeResolved = path.resolve(home);
-		const rel = path.relative(homeResolved, resolved);
-		if (rel.startsWith("..") || path.isAbsolute(rel)) return false;
-		// Reject if cwd doesn't actually exist on disk — fail closed.
-		return existsSync(resolved) && statSync(resolved).isDirectory();
-	} catch {
-		return false;
-	}
 }
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {

@@ -1,24 +1,33 @@
 /**
- * Compact connection indicator for the header. Reads heartbeat metadata
- * from the store; renders a tiny dot:
- *   - green  : last heartbeat within 10s (healthy)
- *   - yellow : 10-20s gap (reconnecting / slow)
- *   - red    : >20s gap or no heartbeat ever (disconnected)
+ * Compact connection/session indicator for the header. Heartbeat answers
+ * "can the browser still hear the deck server?"; the active session status
+ * answers "is the current response still running?". The latter wins for the
+ * visible label so a live turn never appears as ready just because the socket
+ * is healthy.
  *
- * Hovering reveals serverStartedAt, version, buildSha, uptime. Click
- * targets the same details for touch.
+ * Dot colors:
+ *   - green  : ws + heartbeat healthy, active session idle
+ *   - yellow : ws healthy, but active session is working / heartbeat slow
+ *   - red    : ws closed, no heartbeat, or heartbeat stale
  *
- * Tick interval is 1s — cheap, and the dot needs to flip without waiting
- * for the next heartbeat to arrive.
+ * Hovering reveals both session state and transport metadata.
  */
 
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useStore } from "../lib/store";
+import { selectActiveSession, useStore } from "../lib/store";
+
 const HEALTHY_MS = 10_000;
 const WARN_MS = 20_000;
 
 type DotColor = "green" | "yellow" | "red";
+type BusyStatus = "preparing" | "streaming" | "compacting" | "retrying";
+
+const BUSY_LABEL: Record<BusyStatus, string> = {
+	preparing: "preparing",
+	streaming: "streaming",
+	compacting: "compacting",
+	retrying: "retrying",
+};
 
 function classify(gapMs: number, hasHeartbeat: boolean): DotColor {
 	if (!hasHeartbeat) return "red";
@@ -48,6 +57,7 @@ function formatUptime(secs: number): string {
 export function ConnectionIndicator(): JSX.Element {
 	const heartbeat = useStore((s) => s.heartbeat);
 	const wsStatus = useStore((s) => s.wsStatus);
+	const session = useStore(selectActiveSession);
 	const [now, setNow] = useState(Date.now());
 
 	useEffect(() => {
@@ -56,20 +66,32 @@ export function ConnectionIndicator(): JSX.Element {
 	}, []);
 
 	const gap = heartbeat ? now - heartbeat.lastReceivedAtMs : Infinity;
-	const color = classify(gap, heartbeat !== null);
-	const label =
-		color === "green"
-			? "connected"
-			: color === "yellow"
-			? "slow heartbeat"
-			: heartbeat === null
-			? "no heartbeat yet"
-			: "disconnected";
+	const heartbeatColor = classify(gap, heartbeat !== null);
+	const busyLabel = session && session.status !== "idle" ? BUSY_LABEL[session.status] : null;
+	const transportHealthy = wsStatus === "open" && heartbeatColor === "green";
+	const color: DotColor = wsStatus !== "open" || heartbeatColor === "red"
+		? "red"
+		: busyLabel || heartbeatColor === "yellow"
+			? "yellow"
+			: "green";
+	const label = busyLabel
+		?? (color === "green"
+			? "ready"
+			: heartbeatColor === "yellow"
+				? "slow heartbeat"
+				: heartbeat === null
+					? "no heartbeat yet"
+					: wsStatus !== "open"
+						? "disconnected"
+						: "heartbeat stale");
+	const transportLabel = transportHealthy ? "connected" : label;
 	const gapLabel = heartbeat ? `${(gap / 1000).toFixed(1)}s` : "—";
 
 	const tooltip = heartbeat
 		? [
-				`status: ${label}`,
+				`session: ${session?.status ?? "none"}`,
+				`visible: ${label}`,
+				`transport: ${transportLabel}`,
 				`ws: ${wsStatus}`,
 				`gap: ${gapLabel} since last heartbeat`,
 				`server started: ${heartbeat.serverStartedAt}`,
@@ -78,7 +100,12 @@ export function ConnectionIndicator(): JSX.Element {
 				heartbeat.buildSha ? `build: ${heartbeat.buildSha.slice(0, 8)}` : "build: unknown",
 				`pid: ${heartbeat.pid}`,
 		  ].join("\n")
-		: `status: ${label}\nws: ${wsStatus}\nwaiting for the deck server to broadcast a heartbeat`;
+		: [
+				`session: ${session?.status ?? "none"}`,
+				`visible: ${label}`,
+				`ws: ${wsStatus}`,
+				"waiting for the deck server to broadcast a heartbeat",
+		  ].join("\n");
 
 	return (
 		<button

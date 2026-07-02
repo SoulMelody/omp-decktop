@@ -327,6 +327,29 @@
 	.markdown img {
 		@apply my-2 max-w-full h-auto rounded-md border border-line bg-paper-2;
 	}
+
+	/* Skill editor — bind @uiw/react-md-editor to deck tokens. */
+	.skill-md-editor .w-md-editor {
+		@apply rounded-md border border-line bg-paper-2 text-ink shadow-none;
+	}
+	.skill-md-editor .w-md-editor-toolbar {
+		@apply border-line bg-paper-3;
+	}
+	.skill-md-editor .w-md-editor-content,
+	.skill-md-editor .w-md-editor-area,
+	.skill-md-editor .w-md-editor-preview {
+		@apply bg-paper-2 text-ink;
+	}
+	.skill-md-editor .w-md-editor-text-pre > code,
+	.skill-md-editor .w-md-editor-text-input {
+		font-family: var(--font-mono);
+		font-size: 0.78rem !important;
+		line-height: 1.55 !important;
+	}
+	.skill-md-editor .wmde-markdown {
+		background: transparent;
+		color: rgb(var(--ink));
+	}
 }
 
 /* Streaming caret — subtle, monospace block to feel terminal-adjacent. */
