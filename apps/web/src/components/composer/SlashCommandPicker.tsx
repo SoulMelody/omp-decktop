@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
-import type { SlashCommand, SlashCommandScope } from "@omp-deck/protocol";
+import { useEffect, useMemo, useRef } from "react";
+import type { SlashCommandScope } from "@omp-deck/protocol";
+import type { SlashCompletionGroup, SlashCompletionItem } from "@/lib/composer-slash-completion";
 import { cn } from "@/lib/utils";
 
-const SCOPE_STYLE: Record<SlashCommandScope, { className: string; label: string; title: string }> = {
+const SCOPE_STYLE: Record<SlashCommandScope | "skill", { className: string; label: string; title: string }> = {
 	deck: {
 		className: "bg-accent/15 text-accent",
 		label: "deck",
@@ -23,98 +24,104 @@ const SCOPE_STYLE: Record<SlashCommandScope, { className: string; label: string;
 		label: "user",
 		title: "User-global command",
 	},
+	skill: {
+		className: "bg-thinking/15 text-thinking",
+		label: "skill",
+		title: "Installed skill — inserted as /skill <name>",
+	},
 };
 
 interface Props {
-	commands: SlashCommand[];
+	groups: SlashCompletionGroup[];
 	selectedIndex: number;
-	onPick: (cmd: SlashCommand) => void;
+	onPick: (item: SlashCompletionItem) => void;
 	onSelectionChange: (index: number) => void;
 }
 
 /**
- * Autocomplete dropdown anchored above the composer textarea when the draft
- * starts with `/`. Filtering happens *outside* the component — `commands` is
- * already the filtered list, and `selectedIndex` is owned by `Composer` so the
- * textarea's keydown handler can drive it (Arrow / Enter / Tab / Esc).
- *
- * Renders nothing when `commands` is empty so the composer doesn't have to
- * gate the JSX too — it can drop this in unconditionally and let it disappear.
+ * Grouped autocomplete dropdown anchored above the composer textarea when the
+ * draft starts with `/`. Commands and skills are rendered as separate sections;
+ * selection is flattened so the textarea keeps one keyboard owner.
  */
 export function SlashCommandPicker({
-	commands,
+	groups,
 	selectedIndex,
 	onPick,
 	onSelectionChange,
 }: Props) {
 	const listRef = useRef<HTMLDivElement>(null);
+	const items = useMemo(() => groups.flatMap((group) => group.items), [groups]);
 
 	// Keep the active row visible when keyboard nav moves it offscreen.
 	useEffect(() => {
-		const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
+		const el = listRef.current?.querySelector(`[data-option-index="${selectedIndex}"]`) as HTMLElement | undefined;
 		el?.scrollIntoView({ block: "nearest" });
 	}, [selectedIndex]);
 
-	if (commands.length === 0) return null;
+	if (items.length === 0) return null;
 
 	return (
 		<div
 			role="listbox"
-			aria-label="Slash commands"
+			aria-label="Slash completions"
 			className={cn(
-				"absolute bottom-full left-0 right-0 mb-1 max-h-[280px] overflow-y-auto",
+				"absolute bottom-full left-0 right-0 mb-1 max-h-[320px] overflow-y-auto",
 				"rounded-md border border-line bg-paper-2 shadow-[0_8px_24px_-8px_rgba(26,24,20,0.25)]",
 				"font-mono text-[13px]",
 			)}
 		>
 			<div ref={listRef}>
-				{commands.map((cmd, i) => {
-					const active = i === selectedIndex;
-					return (
-						<button
-							key={`${cmd.scope}:${cmd.name}`}
-							type="button"
-							role="option"
-							aria-selected={active}
-							onClick={() => onPick(cmd)}
-							onMouseEnter={() => onSelectionChange(i)}
-							// Prevent the textarea blur that would dismiss the picker
-							// before onClick fires.
-							onMouseDown={(e) => e.preventDefault()}
-							className={cn(
-								"flex w-full items-start gap-2 px-3 py-2 text-left",
-								active ? "bg-accent-soft/60" : "hover:bg-paper-3/60",
-							)}
-						>
-							<div className="min-w-0 flex-1">
-								<div className="flex items-baseline gap-1.5">
-									<span className={cn("font-medium", active ? "text-accent" : "text-ink")}>
-										/{cmd.name}
-									</span>
-									{cmd.argumentHint ? (
-										<span className="font-mono text-2xs text-ink-3">
-											{cmd.argumentHint}
-										</span>
-									) : null}
-								</div>
-								{cmd.description ? (
-									<div className="mt-0.5 truncate font-sans text-xs text-ink-3">
-										{cmd.description}
+				{groups.map((group) => (
+					<div key={group.kind}>
+						<div className="border-b border-line/60 bg-paper px-3 py-1 font-mono text-2xs uppercase tracking-meta text-ink-3">
+							{group.label}
+						</div>
+						{group.items.map((item) => {
+							const flatIndex = items.indexOf(item);
+							const active = flatIndex === selectedIndex;
+							const scope = item.kind === "skill" ? "skill" : item.command?.scope ?? "user";
+							const style = SCOPE_STYLE[scope];
+							return (
+								<button
+									key={`${item.kind}:${item.value}`}
+									type="button"
+									role="option"
+									aria-selected={active}
+									data-option-index={flatIndex}
+									onClick={() => onPick(item)}
+									onMouseEnter={() => onSelectionChange(flatIndex)}
+									// Prevent the textarea blur that would dismiss the picker before onClick fires.
+									onMouseDown={(e) => e.preventDefault()}
+									className={cn(
+										"flex w-full items-start gap-2 px-3 py-2 text-left",
+										active ? "bg-accent-soft/60" : "hover:bg-paper-3/60",
+									)}
+								>
+									<div className="min-w-0 flex-1">
+										<div className="flex items-baseline gap-1.5">
+											<span className={cn("font-medium", active ? "text-accent" : "text-ink")}>{item.label}</span>
+											{item.kind === "command" && item.command?.argumentHint ? (
+												<span className="font-mono text-2xs text-ink-3">{item.command.argumentHint}</span>
+											) : null}
+										</div>
+										{item.description ? (
+											<div className="mt-0.5 truncate font-sans text-xs text-ink-3">{item.description}</div>
+										) : null}
 									</div>
-								) : null}
-							</div>
-							<span
-								className={cn(
-									"shrink-0 self-center rounded px-1.5 py-0.5 font-mono text-2xs uppercase tracking-meta",
-									SCOPE_STYLE[cmd.scope].className,
-								)}
-								title={SCOPE_STYLE[cmd.scope].title}
-							>
-								{SCOPE_STYLE[cmd.scope].label}
-							</span>
-						</button>
-					);
-				})}
+									<span
+										className={cn(
+											"shrink-0 self-center rounded px-1.5 py-0.5 font-mono text-2xs uppercase tracking-meta",
+											style.className,
+										)}
+										title={item.kind === "skill" && item.meta ? item.meta : style.title}
+									>
+										{item.kind === "skill" ? item.skill?.providerLabel ?? style.label : style.label}
+									</span>
+								</button>
+							);
+						})}
+					</div>
+				))}
 			</div>
 			<div className="border-t border-line bg-paper px-3 py-1 font-mono text-2xs text-ink-3">
 				↑↓ navigate · enter pick · esc dismiss

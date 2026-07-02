@@ -8,15 +8,22 @@ import {
 	type DragEvent,
 	type KeyboardEvent,
 } from "react";
-import type { FilePathMatch, SlashCommand } from "@omp-deck/protocol";
+import type { FilePathMatch, SkillSummary, SlashCommand } from "@omp-deck/protocol";
 
 import { api } from "@/lib/api";
+import { skillsApi } from "@/lib/skills-api";
 import { FilePathPicker } from "@/components/composer/FilePathPicker";
 import { SlashCommandPicker } from "@/components/composer/SlashCommandPicker";
 import { Paperclip, ArrowUp, Square, X } from "lucide-react";
 import type { ImageAttachment } from "@omp-deck/protocol";
 
 import { selectActiveSession, useStore } from "@/lib/store";
+import {
+	buildGroupedSlashCompletions,
+	getSlashCompletionQuery,
+	pickSlashCompletionInsertion,
+	type SlashCompletionItem,
+} from "@/lib/composer-slash-completion";
 import { useComposerHistory } from "@/lib/use-composer-history";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +42,7 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
  * `/api/slash-commands` calls on every Vite reload is noise.
  */
 const slashCommandsCache = new Map<string, SlashCommand[]>();
+const skillsCache = new Map<string, SkillSummary[]>();
 
 export function Composer() {
 	const session = useStore(selectActiveSession);
@@ -62,6 +70,7 @@ export function Composer() {
 	// keydown handler can drive Arrow / Enter / Tab / Esc without the picker
 	// having to wire its own listeners onto window.
 	const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+	const [skills, setSkills] = useState<SkillSummary[]>([]);
 	const [slashSelected, setSlashSelected] = useState(0);
 	const sessionCwd = session?.cwd;
 
@@ -99,17 +108,36 @@ export function Composer() {
 		};
 	}, [sessionCwd]);
 
-	// Derived state — the textarea draft tells us whether the picker is active.
-	// Active means the draft starts with "/" and the user hasn't yet typed a
-	// space (which would mean they're typing arguments to an already-chosen
-	// command, not searching for a command name).
-	const slashQuery = useMemo<string | null>(() => {
-		if (!draft.startsWith("/")) return null;
-		const afterSlash = draft.slice(1);
-		// Once whitespace appears, the user is past the command name. Hide.
-		if (/\s/.test(afterSlash)) return null;
-		return afterSlash;
-	}, [draft]);
+	useEffect(() => {
+		if (!sessionCwd) {
+			setSkills([]);
+			return;
+		}
+		const cached = skillsCache.get(sessionCwd);
+		if (cached) {
+			setSkills(cached);
+			return;
+		}
+		let cancelled = false;
+		void skillsApi
+			.list(sessionCwd)
+			.then((res) => {
+				if (cancelled) return;
+				skillsCache.set(sessionCwd, res.skills);
+				setSkills(res.skills);
+			})
+			.catch((err) => {
+				if (!cancelled) console.warn("listSkills failed", err);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [sessionCwd]);
+
+	// Derived state — the textarea draft tells us whether the grouped slash
+	// picker is active. Plain `/foo` filters commands + skills by name; `/skill`
+	// keeps the picker open after the first space and filters only skills.
+	const slashQuery = useMemo(() => getSlashCompletionQuery(draft), [draft]);
 
 	// Client-side virtual slash commands. Routed back to store actions
 	// instead of being sent over the WS as text. The bridge can't see
@@ -133,30 +161,23 @@ export function Composer() {
 		[virtualSlashCommands, slashCommands],
 	);
 
-	const filteredSlash = useMemo(() => {
-		if (slashQuery === null) return [];
-		if (allSlashCommands.length === 0) return [];
-		const q = slashQuery.toLowerCase();
-		if (q === "") return allSlashCommands;
-		// Prefix match wins over substring match so typing the start of a name
-		// surfaces the obvious candidate at the top.
-		const prefix: SlashCommand[] = [];
-		const substr: SlashCommand[] = [];
-		for (const c of allSlashCommands) {
-			const n = c.name.toLowerCase();
-			if (n.startsWith(q)) prefix.push(c);
-			else if (n.includes(q)) substr.push(c);
-		}
-		return [...prefix, ...substr];
-	}, [slashQuery, allSlashCommands]);
+	const slashGroups = useMemo(
+		() =>
+			slashQuery
+				? buildGroupedSlashCompletions(allSlashCommands, skills, slashQuery.query, slashQuery.mode)
+				: [],
+		[slashQuery, allSlashCommands, skills],
+	);
+	const slashItems = useMemo(() => slashGroups.flatMap((group) => group.items), [slashGroups]);
 
 	// Reset highlighted row whenever the candidate list changes so we don't
 	// point at an index that's been filtered out.
 	useEffect(() => {
 		setSlashSelected(0);
-	}, [filteredSlash]);
+	}, [slashItems]);
 
-	const slashOpen = slashQuery !== null && filteredSlash.length > 0;
+	const slashOpen = slashQuery !== null && slashItems.length > 0;
+
 	const disabled = !session;
 	const isBusy = session?.status === "streaming" || session?.status === "retrying" || session?.status === "compacting";
 
@@ -279,30 +300,24 @@ export function Composer() {
 	);
 
 	const pickSlashCommand = useCallback(
-		(cmd: SlashCommand): void => {
+		(item: SlashCompletionItem): void => {
 			// Virtual commands fire on pick and clear the draft — they take no
 			// args today, and the user has already telegraphed intent by
 			// clicking. Falling through to the draft-fill path would force
 			// them to also press Enter for no reason.
-			if (dispatchVirtualCommand(cmd.name, "")) {
+			if (item.kind === "command" && dispatchVirtualCommand(item.value, "")) {
 				setDraft("");
 				const ta = taRef.current;
 				if (ta) ta.style.height = "auto";
 				queueMicrotask(() => taRef.current?.focus());
 				return;
 			}
-			// Replace the entire leading slash token with the chosen command name
-			// and a trailing space. Preserve any whitespace-bounded remainder
-			// (rare — slashQuery !== null guarantees no internal space, but the
-			// draft could still have a newline if we relax the rule later).
-			setDraft((prev) => {
-				const rest = prev.startsWith("/") ? prev.slice(1).match(/\s.*$/s)?.[0] ?? "" : "";
-				return `/${cmd.name} ${rest.trimStart()}`;
-			});
+			const insertion = pickSlashCompletionInsertion(item);
+			setDraft(insertion);
 			queueMicrotask(() => {
 				const ta = taRef.current;
 				if (!ta) return;
-				const pos = cmd.name.length + 2; // `/name ` length
+				const pos = insertion.length;
 				ta.setSelectionRange(pos, pos);
 				ta.focus();
 				autoresize();
@@ -466,7 +481,7 @@ export function Composer() {
 		if (slashOpen) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
-				setSlashSelected((i) => Math.min(i + 1, filteredSlash.length - 1));
+				setSlashSelected((i) => Math.min(i + 1, slashItems.length - 1));
 				return;
 			}
 			if (e.key === "ArrowUp") {
@@ -476,15 +491,15 @@ export function Composer() {
 			}
 			if (e.key === "Enter" || e.key === "Tab") {
 				e.preventDefault();
-				const choice = filteredSlash[slashSelected] ?? filteredSlash[0];
+				const choice = slashItems[slashSelected] ?? slashItems[0];
 				if (choice) pickSlashCommand(choice);
 				return;
 			}
 			if (e.key === "Escape") {
 				e.preventDefault();
-				// Dismiss by clearing the leading slash token. Other keys (typing
+				// Dismiss by clearing the leading slash expression. Other keys (typing
 				// to refine the query) just fall through to the default editor.
-				setDraft((prev) => prev.replace(/^\/\S*/, ""));
+				setDraft((prev) => prev.replace(/^\/.*$/s, ""));
 				return;
 			}
 		}
@@ -613,7 +628,7 @@ export function Composer() {
 					)}
 				>
 					<SlashCommandPicker
-						commands={filteredSlash}
+						groups={slashGroups}
 						selectedIndex={slashSelected}
 						onPick={pickSlashCommand}
 						onSelectionChange={setSlashSelected}

@@ -20,10 +20,17 @@ const log = logger("terminal");
 // Shell detection — always bash for consistency
 // ---------------------------------------------------------------------------
 
-function detectShell(): string {
-	if (process.platform === "win32") {
-		const gitBash = process.env.ProgramFiles
-			? `${process.env.ProgramFiles}\\Git\\bin\\bash.exe`
+export function detectShell(
+	platform: NodeJS.Platform = process.platform,
+	env: NodeJS.ProcessEnv = process.env,
+	which: (bin: string) => string | null = Bun.which,
+): string {
+	const bash = which("bash");
+	if (bash) return bash;
+
+	if (platform === "win32") {
+		const gitBash = env.ProgramFiles
+			? `${env.ProgramFiles}\\Git\\bin\\bash.exe`
 			: "C:\\Program Files\\Git\\bin\\bash.exe";
 		return gitBash;
 	}
