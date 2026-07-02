@@ -5,9 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"dev:termux": "NAPI_RS_FORCE_WASI=1 vite",
 		"build": "tsc -b && vite build",
-		"build:termux": "tsc -b && NAPI_RS_FORCE_WASI=1 vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc -b --noEmit"
 	},
@@ -49,6 +47,6 @@
 		"autoprefixer": "^10.5.2",
 		"tailwindcss": "^4.3.2",
 		"typescript": "^6.0.3",
-		"vite": "^8.1.2"
+		"vite": "^8.1.3"
 	}
 }
