@@ -8,6 +8,7 @@ import {
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { runExtensionCompact, runExtensionSetModel } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/compact-handler";
 import { getSessionSlashCommands } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/get-commands-handler";
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "@oh-my-pi/pi-coding-agent/task";
 import type {
 	AgentSessionEventJson,
 	ExtUiDialogResponse,
@@ -418,9 +419,19 @@ export class InProcessAgentBridge implements AgentBridge {
 			},
 		});
 
+		const eventBus = (session as unknown as {
+			eventBus?: { on: (channel: string, handler: (payload: unknown) => void) => () => void };
+		}).eventBus;
+		const unsubscribeSubagentLifecycle = eventBus?.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, (payload) => {
+			handle.emit({ type: "subagent_lifecycle", payload } as unknown as AgentSessionEventJson);
+		});
+		const unsubscribeSubagentProgress = eventBus?.on(TASK_SUBAGENT_PROGRESS_CHANNEL, (payload) => {
+			handle.emit({ type: "subagent_progress", payload } as unknown as AgentSessionEventJson);
+		});
+
 		// Bridge SDK events to handle's listeners, AND to bridge-internal activity
 		// tracking so the reaper sees real agent work and won't kill an in-flight turn.
-		const unsubscribe = session.subscribe((event) => {
+		const unsubscribeSession = session.subscribe((event) => {
 			const entry = this.active.get(sessionId);
 			if (entry) {
 				entry.lastActivityAt = Date.now();
@@ -471,6 +482,11 @@ export class InProcessAgentBridge implements AgentBridge {
 				}
 			}
 		});
+		const unsubscribe = () => {
+			unsubscribeSession();
+			unsubscribeSubagentLifecycle?.();
+			unsubscribeSubagentProgress?.();
+		};
 
 		this.active.set(sessionId, {
 			handle,
