@@ -76,6 +76,7 @@ export function ModelPickerModal({ open, sessionId, onClose, onPicked }: Props) 
 		return Array.from(byProvider.entries())
 			.map(([provider, items]) => ({
 				provider,
+				providerLabel: items[0]?.providerName ?? provider,
 				items: items.sort((a, b) => {
 					if (a.isCurrent && !b.isCurrent) return -1;
 					if (!a.isCurrent && b.isCurrent) return 1;
@@ -86,7 +87,7 @@ export function ModelPickerModal({ open, sessionId, onClose, onPicked }: Props) 
 			.sort((a, b) => {
 				if (a.hasCurrent && !b.hasCurrent) return -1;
 				if (!a.hasCurrent && b.hasCurrent) return 1;
-				return a.provider.localeCompare(b.provider);
+				return a.providerLabel.localeCompare(b.providerLabel);
 			});
 	}, [models, query, showUnauth]);
 
@@ -170,7 +171,7 @@ export function ModelPickerModal({ open, sessionId, onClose, onPicked }: Props) 
 				{grouped.map((g) => (
 					<div key={g.provider} className="border-b border-line last:border-b-0">
 						<div className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-paper-2 px-3 py-1.5">
-							<div className="meta">{g.provider}</div>
+							<div className="meta">{g.providerLabel}</div>
 							<div className="text-2xs text-ink-3">{g.items.length}</div>
 						</div>
 						<ul>

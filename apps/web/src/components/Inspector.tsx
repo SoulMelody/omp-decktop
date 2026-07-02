@@ -25,7 +25,7 @@ export function Inspector() {
 					<KV k="file" v={shortPath(session.sessionFile, 32)} title={session.sessionFile} />
 				) : null}
 				{session.model ? (
-					<KV k="model" v={`${session.model.provider}/${session.model.id}`} />
+					<KV k="model" v={`${session.model.providerName ?? session.model.provider}/${session.model.id}`} />
 				) : null}
 				{session.thinkingLevel ? <KV k="think" v={session.thinkingLevel} /> : null}
 			</Section>

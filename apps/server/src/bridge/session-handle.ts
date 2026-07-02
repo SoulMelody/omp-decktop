@@ -15,6 +15,7 @@ import type {
 } from "@omp-deck/protocol";
 
 import { logger } from "../log.ts";
+import { resolveProviderName } from "../provider-names.ts";
 import { PlanModeBridge } from "./plan-mode-bridge.ts";
 import type {
 	EventListener,
@@ -153,10 +154,10 @@ export class InProcessSessionHandle implements SessionHandle {
 			sessionFile: this.sessionFile,
 			sessionName: typeof s.sessionName === "string" ? s.sessionName : undefined,
 			cwd: this.cwd,
-			model:
-				s.model && typeof s.model === "object"
-					? { provider: String(s.model.provider), id: String(s.model.id) }
-					: undefined,
+		model:
+			s.model && typeof s.model === "object"
+				? { provider: String(s.model.provider), id: String(s.model.id), providerName: resolveProviderName(String(s.model.provider)) }
+				: undefined,
 			thinkingLevel: typeof s.thinkingLevel === "string" ? s.thinkingLevel : undefined,
 			isStreaming: Boolean(s.isStreaming),
 			messages: Array.isArray(s.messages) ? (s.messages as AgentMessageJson[]) : [],
@@ -230,7 +231,7 @@ export class InProcessSessionHandle implements SessionHandle {
 			cwd: this.cwd,
 			model:
 				s.model && typeof s.model === "object"
-					? { provider: String(s.model.provider), id: String(s.model.id) }
+					? { provider: String(s.model.provider), id: String(s.model.id), providerName: resolveProviderName(String(s.model.provider)) }
 					: undefined,
 			thinkingLevel: typeof s.thinkingLevel === "string" ? s.thinkingLevel : undefined,
 			isStreaming: Boolean(s.isStreaming),

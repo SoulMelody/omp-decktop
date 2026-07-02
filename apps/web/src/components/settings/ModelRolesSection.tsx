@@ -196,7 +196,7 @@ export function ModelRolesSection() {
 												>
 													<option value="">{placeholder}</option>
 													{modelGroups.map(([provider, models]) => (
-														<optgroup key={provider} label={provider}>
+														<optgroup key={provider} label={models[0]?.providerName ?? provider}>
 															{models.map((m) => (
 																<option
 																	key={`${m.provider}/${m.id}`}

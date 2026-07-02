@@ -159,7 +159,7 @@ function Inner({ session }: { session: SessionUi }) {
 				<button
 					type="button"
 					onClick={() => setModelOpen(true)}
-					title={`Switch model (${session.model.provider}/${session.model.id})`}
+					title={`Switch model (${session.model.providerName ?? session.model.provider}/${session.model.id})`}
 					className="hidden h-6 items-center gap-1 rounded-md border border-line bg-paper-2/60 px-2 font-mono text-2xs uppercase tracking-meta text-ink-3 hover:border-ink/30 hover:text-ink sm:flex"
 				>
 					<span className="truncate max-w-[180px]">{session.model.id}</span>

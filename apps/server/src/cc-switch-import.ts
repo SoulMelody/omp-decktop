@@ -236,6 +236,59 @@ function stripAnnotations(raw: string): string | undefined {
 	return cleaned.length > 0 ? cleaned : undefined;
 }
 
+// ─── Dynamic model fetching (one-shot at import time) ──────────────────────
+
+type FetchedModel = { id: string; name: string };
+
+/**
+ * Fetch the live model list from an OpenAI-compatible /v1/models endpoint.
+ * Called once during import so the extension file contains a static model list
+ * – no runtime fetch, no delay on session start.
+ */
+async function fetchModelsFromEndpoint(
+	baseUrl: string,
+	apiKey: string | undefined,
+): Promise<FetchedModel[]> {
+	const cleanBase = baseUrl.replace(/\/+$/, "");
+	const headers: Record<string, string> = {};
+	if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+	let response: Response;
+	try {
+		response = await fetch(`${cleanBase}/models`, { headers });
+	} catch {
+		return [];
+	}
+	if (!response.ok) return [];
+
+	let payload: unknown;
+	try {
+		payload = await response.json();
+	} catch {
+		return [];
+	}
+
+	const items: unknown[] = Array.isArray(payload)
+		? (payload as unknown[])
+		: Array.isArray((payload as Record<string, unknown>)?.data)
+			? ((payload as Record<string, unknown>).data as unknown[])
+			: Array.isArray((payload as Record<string, unknown>)?.models)
+				? ((payload as Record<string, unknown>).models as unknown[])
+				: [];
+
+	const result: FetchedModel[] = [];
+	for (const item of items) {
+		if (!item || typeof item !== "object") continue;
+		const obj = item as Record<string, unknown>;
+		const id = obj.id ?? obj.name ?? obj.model;
+		if (typeof id !== "string" || id.length === 0) continue;
+		result.push({ id, name: id as string });
+	}
+	return result;
+}
+
+// ─── Extension source generation ───────────────────────────────────────────
+
 /**
  * Generate the content of an omp SDK extension `index.ts` file that
  * registers a single custom provider via `pi.registerProvider()`.
@@ -248,21 +301,48 @@ function stripAnnotations(raw: string): string | undefined {
  * - `config.baseUrl`: API endpoint
  * - `config.apiKey`: literal key or env-var name the SDK resolves
  * - `config.api`: built-in api type (e.g. "openai-completions")
- * - `config.models[]`: model definitions with required fields
- * - `config.authHeader: true`: emit `Authorization: Bearer` header
+ * - `config.authHeader: true`: emit `Authorization: Bearer` header when needed
+ * - `config.models`: static model list (pre-fetched at import time for
+ *    OpenAI-compatible providers, single-entry for others)
  */
-function generateExtensionSource(opts: {
+export function generateExtensionSource(opts: {
 	providerId: string;
 	displayName: string;
 	apiType: string;
 	baseUrl?: string;
 	apiKey?: string;
 	model?: string;
+	/** Pre-fetched model list for OpenAI-compatible providers. */
+	models?: FetchedModel[];
 }): string {
-	const { providerId, displayName, apiType, baseUrl, apiKey, model } = opts;
+	const { providerId, displayName, apiType, baseUrl, apiKey, model, models } = opts;
 	const esc = (s: string | undefined) => (s ? JSON.stringify(s) : "undefined");
-	const modelId = model ?? "default";
 	const fnName = sanitizeDirName(providerId).replace(/-/g, "_").replace(/^ccswitch_/, "");
+
+	const modelEntries =
+		models && models.length > 0
+			? models
+					.map(
+						(m) => `        {
+          id: ${esc(m.id)},
+          name: ${esc(m.name)},
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        }`,
+					)
+					.join(",\n")
+			: `        {
+          id: ${esc(model ?? "default")},
+          name: ${esc(model ?? "default")},
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        }`;
 
 	return `/**
  * cc-switch imported provider: ${displayName}
@@ -279,15 +359,7 @@ export default function ccswitch_${fnName}(pi: ExtensionAPI): void {
     api: ${esc(apiType)},
     authHeader: true,
     models: [
-      {
-        id: ${esc(modelId)},
-        name: ${esc(modelId)},
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128000,
-        maxTokens: 8192,
-      },
+${modelEntries}
     ],
   });
 }
@@ -296,22 +368,43 @@ export default function ccswitch_${fnName}(pi: ExtensionAPI): void {
 
 /**
  * Write an extension directory for a cc-switch provider.
+ * For OpenAI-compatible providers, fetches the live model list once
+ * before writing the extension so the generated file contains a static
+ * model list — no runtime fetch on session start.
  * Returns the absolute path of the created extension directory.
  */
-export function writeCcSwitchExtension(provider: CcSwitchProvider): string {
+export async function writeCcSwitchExtension(provider: CcSwitchProvider): Promise<string> {
 	const extensionsRoot = path.join(os.homedir(), ".omp", "agent", "extensions");
 	const dirName = `ccswitch-${sanitizeDirName(provider.id)}`;
 	const extDir = path.join(extensionsRoot, dirName);
 
 	mkdirSync(extDir, { recursive: true });
 
+	const providerId = `ccswitch-${sanitizeDirName(provider.id)}`;
+	const apiType = provider.apiType ?? "openai-completions";
+	const baseUrl = extractBaseUrl(provider.env, provider.configIni);
+	const apiKey = extractApiKey(provider.env, provider.auth);
+	const model = extractModel(provider.env, provider.meta, provider.configIni);
+
+	// Pre-fetch model list for OpenAI-compatible providers.
+	let models: FetchedModel[] | undefined;
+	if ((apiType === "openai-completions" || apiType === "openai-responses") && baseUrl) {
+		models = await fetchModelsFromEndpoint(baseUrl, apiKey);
+		if (models.length === 0) {
+			log.warn(`no models returned from ${baseUrl}/models for ${provider.name}`);
+		} else {
+			log.info(`fetched ${models.length} models from ${baseUrl}/models for ${provider.name}`);
+		}
+	}
+
 	const source = generateExtensionSource({
-		providerId: `ccswitch-${sanitizeDirName(provider.id)}`,
+		providerId,
 		displayName: provider.name,
-		apiType: provider.apiType ?? "openai-completions",
-		baseUrl: extractBaseUrl(provider.env, provider.configIni),
-		apiKey: extractApiKey(provider.env, provider.auth),
-		model: extractModel(provider.env, provider.meta, provider.configIni),
+		apiType,
+		baseUrl,
+		apiKey,
+		model,
+		models,
 	});
 
 	const indexPath = path.join(extDir, "index.ts");

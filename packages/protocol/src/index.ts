@@ -23,6 +23,8 @@ export type { ValidationError, ValidationResult } from "./validate";
 export interface ModelRef {
 	provider: string;
 	id: string;
+	/** Human-readable provider display name. Present when the server can resolve it. */
+	providerName?: string;
 }
 
 export interface SessionSummary {
@@ -309,6 +311,8 @@ export interface BridgeLogsResponse {
 
 export interface ModelInfo {
 	provider: string;
+	/** Human-readable provider display name, e.g. "My Provider" for cc-switch imports. */
+	providerName?: string;
 	id: string;
 	label: string;
 	role?: string;

@@ -3,6 +3,7 @@ import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import type { ModelInfo, SessionSummary } from "@omp-deck/protocol";
 
 import { looksLikePlaceholderKey } from "../credential-quality.ts";
+import { resolveProviderName } from "../provider-names.ts";
 
 // `Model` is owned by `@oh-my-pi/pi-ai`, a transitive dep we don't bring in
 // directly. Treat it as opaque at the bridge boundary — we only ever pass it
@@ -156,12 +157,14 @@ export function modelInfoFromSdk(
 			isAvailable = false;
 		}
 	}
+	const providerName = resolveProviderName(provider);
 	const info: ModelInfo = {
 		provider,
 		id: model.id,
 		label: normalizeLabel(model.name) || model.id,
 		isAvailable,
 	};
+	if (providerName) info.providerName = providerName;
 	if (isSubscription) info.isSubscription = true;
 	if (typeof model.contextWindow === "number" && model.contextWindow > 0) {
 		info.contextWindow = model.contextWindow;

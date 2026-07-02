@@ -118,7 +118,7 @@ export function buildCcSwitchRouter(): Hono {
 			}
 
 			try {
-				const extDir = writeCcSwitchExtension(provider);
+				const extDir = await writeCcSwitchExtension(provider);
 				results.push({ key, name: provider.name, status: "ok", extensionDir: extDir });
 				okCount++;
 				log.info(`imported cc-switch provider "${provider.name}" → ${extDir}`);
