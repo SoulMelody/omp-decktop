@@ -44,6 +44,19 @@ import {
 } from "./env-store.ts";
 import { setLogLevel } from "./log.ts";
 
+export const MODEL_ROLE_CATALOG: readonly ModelRoleEntry[] = [
+	{ key: "default", label: "Default", description: "Fallback model for unspecified roles." },
+	{ key: "smol", label: "Fast", description: "Low-latency tasks and quick responses." },
+	{ key: "slow", label: "Thinking", description: "Hard reasoning and deeper analysis." },
+	{ key: "vision", label: "Vision", description: "Image-capable tasks." },
+	{ key: "plan", label: "Architect", description: "Planning, architecture, and design work." },
+	{ key: "designer", label: "Designer", description: "UI and product design work." },
+	{ key: "commit", label: "Commit", description: "Commit messages and git summarization." },
+	{ key: "tiny", label: "Tiny", description: "Cheap utility tasks and small transformations." },
+	{ key: "task", label: "Subtask", description: "Subagent/subtask execution." },
+	{ key: "advisor", label: "Advisor", description: "Guidance, review, and advisory flows." },
+] as const;
+
 export function buildSettingsRouter(
 	bridge: AgentBridge,
 	config: Config,
@@ -106,18 +119,7 @@ export function buildSettingsRouter(
 
 	// ─── Model Roles ──────────────────────────────────────────────────────────
 
-	const ROLE_CATALOG: readonly ModelRoleEntry[] = [
-		{ key: "default", label: "Default", description: "Fallback model for unspecified roles." },
-		{ key: "fast", label: "Fast", description: "Low-latency tasks and quick responses." },
-		{ key: "thinking", label: "Thinking", description: "Hard reasoning and deeper analysis." },
-		{ key: "vision", label: "Vision", description: "Image-capable tasks." },
-		{ key: "architect", label: "Architect", description: "Planning, architecture, and design work." },
-		{ key: "designer", label: "Designer", description: "UI and product design work." },
-		{ key: "commit", label: "Commit", description: "Commit messages and git summarization." },
-		{ key: "tiny", label: "Tiny", description: "Cheap utility tasks and small transformations." },
-		{ key: "subtask", label: "Subtask", description: "Subagent/subtask execution." },
-		{ key: "advisor", label: "Advisor", description: "Guidance, review, and advisory flows." },
-	] as const;
+	const ROLE_CATALOG = MODEL_ROLE_CATALOG;
 
 	const VALID_ROLES = new Set<string>(ROLE_CATALOG.map((r) => r.key));
 

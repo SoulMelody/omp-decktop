@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 export function ModelRolesSection() {
 	const [roles, setRoles] = useState<ModelRolesResponse | null>(null);
-	const [draft, setDraft] = useState<Map<string, string | null>>(new Map());
+	const [draft, setDraft] = useState<Map<string, DraftRoleValue>>(new Map());
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | undefined>();
 	const [saved, setSaved] = useState(false);
@@ -21,9 +21,9 @@ export function ModelRolesSection() {
 		try {
 			const resp = await settingsApi.modelRoles.list();
 			setRoles(resp);
-			const m = new Map<string, string | null>();
+			const m = new Map<string, DraftRoleValue>();
 			for (const r of resp.roles) {
-				m.set(r.key, r.modelId ?? null);
+				m.set(r.key, parseModelRoleValue(r.modelId ?? null));
 			}
 			setDraft(m);
 		} catch (e) {
@@ -38,7 +38,8 @@ export function ModelRolesSection() {
 	const isDirty = (() => {
 		if (!roles) return false;
 		for (const r of roles.roles) {
-			if ((draft.get(r.key) ?? null) !== (r.modelId ?? null)) return true;
+			const current = draft.get(r.key) ?? EMPTY_DRAFT_ROLE_VALUE;
+			if (formatModelRoleValue(current.modelId, current.thinkingLevel) !== (r.modelId ?? null)) return true;
 		}
 		return false;
 	})();
@@ -50,7 +51,7 @@ export function ModelRolesSection() {
 		try {
 			const updates: Record<string, string | null> = {};
 			for (const [key, val] of draft) {
-				updates[key] = val || null;
+				updates[key] = formatModelRoleValue(val.modelId, val.thinkingLevel);
 			}
 			await settingsApi.modelRoles.save(updates);
 			setSaved(true);
@@ -159,12 +160,15 @@ export function ModelRolesSection() {
 									<th className="px-3 py-2 text-left font-mono text-2xs uppercase tracking-meta text-ink-3">
 										Model
 									</th>
+									<th className="px-3 py-2 text-left font-mono text-2xs uppercase tracking-meta text-ink-3">
+										Thinking
+									</th>
 									<th className="px-3 py-2 text-right font-mono text-2xs uppercase tracking-meta text-ink-3" />
 								</tr>
 							</thead>
 							<tbody>
 								{currentRoles.map((r) => {
-									const current = draft.get(r.key);
+									const current = draft.get(r.key) ?? EMPTY_DRAFT_ROLE_VALUE;
 									const isDefault = r.key === "default";
 									const placeholder = isDefault ? "SDK default" : "Inherits Default";
 									return (
@@ -184,44 +188,70 @@ export function ModelRolesSection() {
 												</div>
 											</td>
 											<td className="px-3 py-2 text-xs text-ink-3">{r.description}</td>
-											<td className="px-3 py-2">
-												<select
-													value={current ?? ""}
-													onChange={(e) => {
-														const next = new Map(draft);
-														next.set(r.key, e.target.value || null);
-														setDraft(next);
-													}}
-													className="field h-8 w-full max-w-[320px] px-2 font-mono text-xs"
+										<td className="px-3 py-2">
+											<select
+												value={current.modelId}
+												onChange={(e) => {
+													const modelId = e.target.value;
+													const next = new Map(draft);
+													next.set(r.key, {
+														modelId,
+														thinkingLevel: modelId ? current.thinkingLevel : "",
+													});
+													setDraft(next);
+												}}
+												className="field h-8 w-full max-w-[320px] px-2 font-mono text-xs"
+											>
+												<option value="">{placeholder}</option>
+												{modelGroups.map(([provider, models]) => (
+													<optgroup key={provider} label={models[0]?.providerName ?? provider}>
+														{models.map((m) => (
+															<option
+																key={`${m.provider}/${m.id}`}
+																value={`${m.provider}/${m.id}`}
+															>
+																{m.label} ({m.id})
+																{m.contextWindow ? ` · ${formatCtx(m.contextWindow)}` : ""}
+															</option>
+														))}
+													</optgroup>
+												))}
+											</select>
+										</td>
+										<td className="px-3 py-2">
+											<select
+												value={current.thinkingLevel}
+												disabled={!current.modelId}
+												onChange={(e) => {
+													const next = new Map(draft);
+													next.set(r.key, {
+														modelId: current.modelId,
+														thinkingLevel: e.target.value,
+													});
+													setDraft(next);
+												}}
+												className="field h-8 w-28 px-2 font-mono text-xs disabled:opacity-60"
+											>
+												<option value="">Default</option>
+												{THINKING_LEVELS.map((level) => (
+													<option key={level} value={level}>
+														{level}
+													</option>
+												))}
+											</select>
+										</td>
+										<td className="px-3 py-2 text-right">
+											{current.modelId ? (
+												<button
+													type="button"
+													title="Clear"
+													onClick={() => void handleClear(r.key)}
+													className="inline-flex h-6 w-6 items-center justify-center rounded text-ink-4 hover:bg-danger/10 hover:text-danger"
 												>
-													<option value="">{placeholder}</option>
-													{modelGroups.map(([provider, models]) => (
-														<optgroup key={provider} label={models[0]?.providerName ?? provider}>
-															{models.map((m) => (
-																<option
-																	key={`${m.provider}/${m.id}`}
-																	value={`${m.provider}/${m.id}`}
-																>
-																	{m.label} ({m.id})
-																	{m.contextWindow ? ` · ${formatCtx(m.contextWindow)}` : ""}
-																</option>
-															))}
-														</optgroup>
-													))}
-												</select>
-											</td>
-											<td className="px-3 py-2 text-right">
-												{current !== null && current !== undefined && current !== "" ? (
-													<button
-														type="button"
-														title="Clear"
-														onClick={() => void handleClear(r.key)}
-														className="inline-flex h-6 w-6 items-center justify-center rounded text-ink-4 hover:bg-danger/10 hover:text-danger"
-													>
-														<Trash2 className="h-3 w-3" />
-													</button>
-												) : null}
-											</td>
+													<Trash2 className="h-3 w-3" />
+												</button>
+											) : null}
+										</td>
 										</tr>
 									);
 								})}
@@ -232,6 +262,36 @@ export function ModelRolesSection() {
 			)}
 		</div>
 	);
+}
+
+const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"] as const;
+
+type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+type DraftRoleValue = { modelId: string; thinkingLevel: string };
+
+const EMPTY_DRAFT_ROLE_VALUE: DraftRoleValue = { modelId: "", thinkingLevel: "" };
+
+function isThinkingLevel(value: string): value is ThinkingLevel {
+	return THINKING_LEVELS.includes(value as ThinkingLevel);
+}
+
+export function parseModelRoleValue(value: string | null): { modelId: string; thinkingLevel: string } {
+	if (!value) return { modelId: "", thinkingLevel: "" };
+
+	const suffixStart = value.lastIndexOf(":");
+	if (suffixStart === -1) return { modelId: value, thinkingLevel: "" };
+
+	const suffix = value.slice(suffixStart + 1);
+	if (!isThinkingLevel(suffix)) return { modelId: value, thinkingLevel: "" };
+
+	return { modelId: value.slice(0, suffixStart), thinkingLevel: suffix };
+}
+
+export function formatModelRoleValue(modelId: string | null, thinkingLevel: string): string | null {
+	if (!modelId) return null;
+	if (!thinkingLevel) return modelId;
+	return `${modelId}:${thinkingLevel}`;
 }
 
 function formatCtx(tokens: number): string {
