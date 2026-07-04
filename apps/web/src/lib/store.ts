@@ -384,6 +384,9 @@ interface StoreState {
 	terminalOpen: boolean;
 	terminalReady: boolean;
 
+	/** Pinned todos panel state for the active chat column. */
+	todoPanelOpen: boolean;
+
 	/**
 	 * Monotonic counter bumped every time the server broadcasts a `tasks_changed`
 	 * frame (any kanban mutation, whether triggered by the deck UI, a deck slash
@@ -469,6 +472,7 @@ interface StoreState {
 	setSidebarOpen(open: boolean): void;
 	setInspectorOpen(open: boolean): void;
 	setTerminalOpen(open: boolean): void;
+	toggleTodoPanel(): void;
 	/** Send a dialog response over the WS and clear it locally. */
 	respondToExtUiDialog(sessionId: string, dialogId: string, response: ExtUiDialogResponse): void;
 	/**
@@ -525,6 +529,7 @@ export const useStore = create<StoreState>()(
 		inspectorOpen: readChromeOpen("omp-deck:inspector-open", false),
 		terminalOpen: false,
 		terminalReady: false,
+		todoPanelOpen: false,
 
 		async bootstrap() {
 			get().connect();
@@ -817,6 +822,10 @@ export const useStore = create<StoreState>()(
 				get().ws?.send({ type: "terminal_close" });
 			}
 			set({ terminalOpen: open });
+		},
+
+		toggleTodoPanel() {
+			set((s) => ({ todoPanelOpen: !s.todoPanelOpen }));
 		},
 
 		respondToExtUiDialog(sessionId, dialogId, response) {

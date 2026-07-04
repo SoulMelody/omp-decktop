@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown } from "lucide-react";
 import { useStore, selectActiveSession } from "@/lib/store";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, TodoPhase } from "@/lib/types";
 import { cn, truncate } from "@/lib/utils";
 import { ChatHeader } from "./chat/ChatHeader";
 import { QuickHistoryRail, type QuickHistoryItem } from "./chat/QuickHistoryRail";
 import { SessionPicker } from "./chat/SessionPicker";
+import { TodoPanel } from "./todos/TodoPanel";
 import { UserMessage } from "./messages/UserMessage";
 import { AssistantMessage } from "./messages/AssistantMessage";
 import { Notice } from "./messages/Notice";
@@ -14,16 +16,37 @@ import { IrcLine } from "./messages/IrcLine";
 import { QueuedMessage } from "./messages/QueuedMessage";
 import { PlanApproval } from "./messages/PlanApproval";
 
+export function isScrollToBottomAffordanceVisible(fromBottom: number): boolean {
+	return fromBottom > 100;
+}
+
+export function getScrollToBottomTarget({ scrollHeight }: { scrollHeight: number }): { scrollTop: number; sticky: true } {
+	return { scrollTop: scrollHeight, sticky: true };
+}
+
+export function shouldRenderPinnedTodosPanel({
+	todoPanelOpen,
+	todoPhases,
+}: {
+	todoPanelOpen: boolean;
+	todoPhases: TodoPhase[];
+}): boolean {
+	return todoPanelOpen && todoPhases.length > 0;
+}
+
 export function Chat() {
 	const session = useStore(selectActiveSession);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const stickyRef = useRef(true);
 	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 	const [activeAnchorId, setActiveAnchorId] = useState<string | undefined>(undefined);
+	const [showScrollButton, setShowScrollButton] = useState(false);
 
 	const messages = session?.messages ?? [];
 	const toolCalls = session?.toolCalls ?? {};
 	const queuedPrompts = session?.queuedPrompts ?? [];
+	const todoPanelOpen = useStore((s) => s.todoPanelOpen);
+	const todoPhases = session?.todoPhases ?? [];
 
 	// A "busy but nothing visible yet" indicator. Covers the silent windows
 	// where the agent is working but no live content is on screen: right after
@@ -77,7 +100,19 @@ export function Chat() {
 		const el = scrollRef.current;
 		if (!el) return;
 		const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-		stickyRef.current = fromBottom < 100;
+		const showButton = isScrollToBottomAffordanceVisible(fromBottom);
+		stickyRef.current = !showButton;
+		setShowScrollButton(showButton);
+		syncActiveAnchor();
+	}
+
+	function scrollToBottom(): void {
+		const el = scrollRef.current;
+		if (!el) return;
+		const target = getScrollToBottomTarget({ scrollHeight: el.scrollHeight });
+		el.scrollTop = target.scrollTop;
+		stickyRef.current = target.sticky;
+		setShowScrollButton(false);
 		syncActiveAnchor();
 	}
 
@@ -99,6 +134,11 @@ export function Chat() {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<ChatHeader />
+			{shouldRenderPinnedTodosPanel({ todoPanelOpen, todoPhases }) ? (
+				<div className="max-h-[40vh] shrink-0 overflow-y-auto">
+					<TodoPanel phases={todoPhases} />
+				</div>
+			) : null}
 			<div className="relative flex-1 min-h-0">
 				<div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto">
 					<div className="mx-auto flex max-w-[760px] flex-col gap-7 px-6 py-10 lg:pr-20">
@@ -206,6 +246,16 @@ export function Chat() {
 					</div>
 				</div>
 				<QuickHistoryRail items={railItems} activeId={activeAnchorId} onJump={jumpToMessage} />
+				{showScrollButton ? (
+					<button
+						type="button"
+						onClick={scrollToBottom}
+						aria-label="Scroll to bottom"
+						className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line bg-paper-2 p-2 text-ink-2 shadow-[0_8px_24px_-8px_rgba(26,24,20,0.25)] transition hover:bg-paper hover:text-ink"
+					>
+						<ArrowDown className="h-4 w-4" />
+					</button>
+				) : null}
 			</div>
 		</div>
 	);

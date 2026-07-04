@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { NavRail } from "./NavRail";
-import { FoldVertical, Menu, PanelRight, Terminal, UnfoldVertical, X } from "lucide-react";
+import { FoldVertical, ListTodo, Menu, PanelRight, Terminal, UnfoldVertical, X } from "lucide-react";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export function Layout({ sidebar, main, inspector, topBar }: Props) {
 					<LocaleSwitcher />
 					<ConnectionIndicator />
 					<ToolCardsToggle />
+					<TodoPanelToggle />
 					<button
 						type="button"
 						className={cn("btn-ghost h-7 w-7 p-0", terminalOpen && "lg:bg-paper-3")}
@@ -153,6 +154,22 @@ function MobileCloseBar({ onClose, side }: { onClose: () => void; side: "left" |
 				</span>
 			) : null}
 		</div>
+	);
+}
+
+function TodoPanelToggle() {
+	const open = useStore((s) => s.todoPanelOpen);
+	const toggle = useStore((s) => s.toggleTodoPanel);
+	return (
+		<button
+			type="button"
+			className={cn("btn-ghost h-7 w-7 p-0", open && "lg:bg-paper-3")}
+			onClick={toggle}
+			aria-label="Toggle todos"
+			title="Toggle todos"
+		>
+			<ListTodo className="h-4 w-4" />
+		</button>
 	);
 }
 
