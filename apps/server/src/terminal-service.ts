@@ -20,20 +20,31 @@ const log = logger("terminal");
 // Shell detection — always bash for consistency
 // ---------------------------------------------------------------------------
 
+/**
+ * Detect the shell path for PTY terminal.
+ *
+ * On Windows, we **skip `which("bash")`** and always use Git Bash.
+ * `Bun.which("bash")` on Windows can return WSL's bash (`bash.exe` in
+ * System32 or a UNC WSL path), which is NOT a valid Windows PTY shell.
+ *
+ * On Unix/Android, we use `which("bash")` first, then fallback to /bin/bash.
+ */
 export function detectShell(
 	platform: NodeJS.Platform = process.platform,
 	env: NodeJS.ProcessEnv = process.env,
 	which: (bin: string) => string | null = Bun.which,
 ): string {
-	const bash = which("bash");
-	if (bash) return bash;
-
+	// Windows: always Git Bash, never WSL bash
 	if (platform === "win32") {
 		const gitBash = env.ProgramFiles
 			? `${env.ProgramFiles}\\Git\\bin\\bash.exe`
 			: "C:\\Program Files\\Git\\bin\\bash.exe";
 		return gitBash;
 	}
+
+	// Unix/Android: which first, then fallback
+	const bash = which("bash");
+	if (bash) return bash;
 	return "/bin/bash";
 }
 
