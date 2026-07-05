@@ -200,7 +200,12 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 			return { ...state, todoPhases: normalizeTodoPhases(phases) };
 		}
 		case "todo_auto_clear":
-			return { ...state, todoPhases: [] };
+			// The SDK drops completed tasks from its live cache a short while
+			// after a turn settles. The deck should NOT follow that clear: with
+			// a pinned todo panel open, an auto-clear would blank the panel out
+			// from under the user. Keep the last rendered list until a real
+			// `todo_reminder`/`todo_phases_set` explicitly replaces it.
+			return state;
 
 		// ─── Compaction / retry / TTSR ────────────────────────────────────
 		case "auto_compaction_start":

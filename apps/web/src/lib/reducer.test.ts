@@ -156,6 +156,38 @@ describe("reducer todo_phases_set (T-106)", () => {
 	});
 });
 
+describe("reducer todo_auto_clear event", () => {
+	test("keeps the last rendered todo list instead of clearing it", () => {
+		let s = fresh();
+		s = applyEvent(s, {
+			type: "todo_phases_set",
+			todoPhases: [{ name: "Merge", tasks: [{ content: "Stage A", status: "completed" }] }],
+		} as never);
+		expect(s.todoPhases).toHaveLength(1);
+		const before = s.todoPhases;
+		s = applyEvent(s, { type: "todo_auto_clear" } as never);
+		// The SDK's auto-clear must not blank a pinned todo panel — the last
+		// list survives untouched until a real reminder/phases_set replaces it.
+		expect(s.todoPhases).toBe(before);
+		expect(s.todoPhases[0]!.name).toBe("Merge");
+	});
+
+	test("a later todo_phases_set still replaces the retained list", () => {
+		let s = fresh();
+		s = applyEvent(s, {
+			type: "todo_phases_set",
+			todoPhases: [{ name: "old", tasks: [{ content: "x", status: "completed" }] }],
+		} as never);
+		s = applyEvent(s, { type: "todo_auto_clear" } as never);
+		s = applyEvent(s, {
+			type: "todo_phases_set",
+			todoPhases: [{ name: "new", tasks: [{ content: "y", status: "pending" }] }],
+		} as never);
+		expect(s.todoPhases).toHaveLength(1);
+		expect(s.todoPhases[0]!.name).toBe("new");
+	});
+});
+
 describe("reducer queue_state event", () => {
 	test("replaces queuedPrompts wholesale with the broadcast list", () => {
 		let s = fresh();

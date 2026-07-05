@@ -361,10 +361,17 @@ interface StoreState {
 	 * Tool-card view state. `allCollapsed` is the bulk default; `perCard` holds
 	 * user overrides (key = toolCallId, value = isOpen). On bulk toggle we clear
 	 * `perCard` so the new default applies to every card uniformly.
+	 *
+	 * `hideAll` is a separate, more aggressive axis: when on, tool calls render
+	 * nothing but a live spinner + running tool name and never render history
+	 * (see `AssistantMessage.tsx`). It takes visual precedence over
+	 * `allCollapsed`/`perCard` — those stay togglable but have no visible effect
+	 * while `hideAll` is active.
 	 */
 	toolView: {
 		allCollapsed: boolean;
 		perCard: Record<string, boolean>;
+		hideAll: boolean;
 	};
 
 	/** Composer pre-fill used by `Open in chat` from the Tasks view. */
@@ -470,6 +477,7 @@ interface StoreState {
 	disposeSession(id: string): Promise<void>;
 	renameSession(id: string, name: string): Promise<void>;
 	toggleAllToolCards(): void;
+	toggleHideAllToolCards(): void;
 	setToolCardOpen(id: string, open: boolean): void;
 	setPendingDraft(draft: { text: string } | undefined): void;
 	setSidebarOpen(open: boolean): void;
@@ -527,7 +535,7 @@ export const useStore = create<StoreState>()(
 		// Restore last active session so the page survives Vite HMR full-reloads
 		// on background tab return (see store subscription below that persists it).
 		activeId: readActiveSessionId(),
-		toolView: { allCollapsed: false, perCard: {} },
+		toolView: { allCollapsed: false, perCard: {}, hideAll: false },
 		tasksChangeCounter: 0,
 		skillsChangeCounter: 0,
 		kbChangeCounter: 0,
@@ -792,14 +800,20 @@ export const useStore = create<StoreState>()(
 
 		toggleAllToolCards() {
 			set((s) => ({
-				toolView: { allCollapsed: !s.toolView.allCollapsed, perCard: {} },
+				toolView: { ...s.toolView, allCollapsed: !s.toolView.allCollapsed, perCard: {} },
+			}));
+		},
+
+		toggleHideAllToolCards() {
+			set((s) => ({
+				toolView: { ...s.toolView, hideAll: !s.toolView.hideAll },
 			}));
 		},
 
 		setToolCardOpen(id, open) {
 			set((s) => ({
 				toolView: {
-					allCollapsed: s.toolView.allCollapsed,
+					...s.toolView,
 					perCard: { ...s.toolView.perCard, [id]: open },
 				},
 			}));
