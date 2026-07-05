@@ -15,7 +15,11 @@
  * next to the other server-level wiring.
  */
 
-import { mkdir, readdir, readFile, stat, writeFile, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile, rm, symlink } from "node:fs/promises";
+import { exec as execAsync } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFile = promisify(execAsync);
 import * as path from "node:path";
 import * as os from "node:os";
 
@@ -36,6 +40,13 @@ import type {
 	InstallSkillFromUrlRequest,
 	InstallSkillFromUrlResponse,
 	DeleteSkillResponse,
+	InstallSkillFromNpmRequest,
+	InstallSkillFromNpmResponse,
+	RemoveSkillFromNpmRequest,
+	RemoveSkillFromNpmResponse,
+	ListNpmSkillsRequest,
+	ListNpmSkillsResponse,
+	NpmSkillEntry,
 } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
@@ -318,6 +329,191 @@ export class SkillsService {
 		await writeFile(skillPath, body, "utf8");
 		log.info(`installed skill from URL at ${skillPath}`);
 		return { id: encodePathToId(skillPath), skillPath, dirName };
+	}
+
+	// ─── NPM-based skill management (via bunx skills CLI) ──────────────────────
+
+	/**
+	 * Resolve the target directory for npm-installed skills.
+	 * Uses the universal Agent Skills standard: `.agents/skills` for project,
+	 * `~/.agents/skills` for user. Also writes to omp-native paths for omp discovery.
+	 */
+	private resolveNpmSkillRoot(scope: "user" | "project", cwd?: string): string {
+		if (scope === "project") {
+			const resolvedCwd = path.resolve(cwd?.trim() || this.config.defaultCwd);
+			if (!isCwdAllowed(resolvedCwd, [this.config.defaultCwd, ...this.config.extraWorkspaces])) {
+				throw new UserFacingError("project cwd is not under an allowed root", 403);
+			}
+			return path.join(resolvedCwd, ".agents", "skills");
+		}
+		return path.join(os.homedir(), ".agents", "skills");
+	}
+
+	/**
+	 * Install skills from a source via `bunx skills add`.
+	 * This supports the full vercel-labs/skills source format:
+	 *   - `owner/repo` (GitHub shorthand)
+	 *   - `https://github.com/owner/repo` (full URL)
+	 *   - `git@github.com:owner/repo.git` (git URL)
+	 *   - `./local-path` (local directory)
+	 */
+	async installFromNpm(req: InstallSkillFromNpmRequest): Promise<InstallSkillFromNpmResponse> {
+		const scope = req.scope ?? "user";
+		if (scope !== "user" && scope !== "project") {
+			throw new UserFacingError("scope must be \"user\" or \"project\"", 400);
+		}
+
+		const source = req.source.source.trim();
+		if (!source) throw new UserFacingError("source.source is required", 400);
+
+		// Build npx skills add command
+		const args = ["skills", "add", source];
+
+		// Scope flag
+		if (scope === "user") {
+			args.push("-g");
+		}
+
+		// Skill filter
+		if (req.source.skill) {
+			args.push("--skill", req.source.skill);
+		}
+
+		// Yes (skip prompts)
+		if (req.yes !== false) {
+			args.push("-y");
+		}
+
+		// Copy mode
+		if (req.copy) {
+			args.push("--copy");
+		}
+
+		const cwd = req.cwd?.trim() || this.config.defaultCwd;
+		const resolvedCwd = path.resolve(cwd);
+
+		log.info(`bunx skills add ${source} scope=${scope} cwd=${resolvedCwd}`);
+
+		// bunx for Bun runtime compatibility (~2s startup vs npx's ~5s).
+		const cmd = `bunx ${args.map(a => `"${a}"`).join(" ")}`;
+		try {
+			const { stdout, stderr } = await execFile(cmd, {
+				cwd: resolvedCwd,
+				timeout: 120_000,
+				maxBuffer: 2 * 1024 * 1024,
+				env: { ...process.env },
+			});
+			const output = stdout + (stderr ? `\n${stderr}` : "");
+			log.info(`bunx skills add succeeded`);
+
+			// Parse installed skill paths from the target directory
+			const root = this.resolveNpmSkillRoot(scope, req.cwd);
+			const installedSkils = await listSkillDirs(root);
+
+			// Also install to omp-native root for SDK discovery
+			const ompRoot = this.resolveSkillRoot(scope, req.cwd);
+			await syncNpmToOmp(root, ompRoot);
+
+			return {
+				skills: installedSkils,
+				paths: installedSkils.map(s => path.join(root, s)),
+				scope,
+				output: output.slice(0, 4096),
+			};
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`bunx skills add failed`, err);
+			throw new UserFacingError(`bunx skills add failed: ${msg}`, 502);
+		}
+	}
+
+	/** Remove installed skills via `bunx skills remove`. */
+	async removeFromNpm(req: RemoveSkillFromNpmRequest): Promise<RemoveSkillFromNpmResponse> {
+		const scope = req.scope ?? "user";
+		if (scope !== "user" && scope !== "project") {
+			throw new UserFacingError("scope must be \"user\" or \"project\"", 400);
+		}
+		if (!req.skills.length) throw new UserFacingError("skills array is required", 400);
+
+		const skillNames = req.skills.map(s => s.trim()).filter(Boolean);
+		if (!skillNames.length) throw new UserFacingError("no valid skill names", 400);
+
+		const args = ["skills", "remove", ...skillNames];
+
+		if (scope === "user") {
+			args.push("-g");
+		}
+		if (req.yes !== false) {
+			args.push("-y");
+		}
+
+		const cwd = req.cwd?.trim() || this.config.defaultCwd;
+		const resolvedCwd = path.resolve(cwd);
+
+		log.info(`bunx skills remove ${skillNames.join(", ")} scope=${scope}`);
+
+		const cmd = `bunx ${args.map(a => `"${a}"`).join(" ")}`;
+		try {
+			const { stdout, stderr } = await execFile(cmd, {
+				cwd: resolvedCwd,
+				timeout: 60_000,
+				maxBuffer: 512 * 1024,
+				env: { ...process.env },
+			});
+			const output = stdout + (stderr ? `\n${stderr}` : "");
+			log.info(`bunx skills remove succeeded`);
+
+			// Clean up from omp-native root as well
+			const ompRoot = this.resolveSkillRoot(scope, req.cwd);
+			await cleanupOmpSkills(ompRoot, skillNames);
+
+			return {
+				skills: skillNames,
+				scope,
+				output: output.slice(0, 4096),
+			};
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`bunx skills remove failed`, err);
+			throw new UserFacingError(`bunx skills remove failed: ${msg}`, 502);
+		}
+	}
+
+	/** List npm-installed skills via `bunx skills list`. */
+	async listNpmSkills(req: ListNpmSkillsRequest): Promise<ListNpmSkillsResponse> {
+		const scope = req.scope ?? "all";
+		if (scope !== "user" && scope !== "project" && scope !== "all") {
+			throw new UserFacingError("scope must be \"user\", \"project\", or \"all\"", 400);
+		}
+
+		const args = ["skills", "ls"];
+		if (scope === "user") args.push("-g");
+		if (scope === "project") args.push("-p");
+
+		const cwd = req.cwd?.trim() || this.config.defaultCwd;
+		const resolvedCwd = path.resolve(cwd);
+
+		const cmd = `bunx ${args.map(a => `"${a}"`).join(" ")}`;
+		try {
+			const { stdout, stderr } = await execFile(cmd, {
+				cwd: resolvedCwd,
+				timeout: 30_000,
+				maxBuffer: 512 * 1024,
+				env: { ...process.env },
+			});
+			const output = stdout + (stderr ? `\n${stderr}` : "");
+
+			// Parse npx skills list output to extract skill entries.
+			// Output format is a tree with skill names and paths.
+			const skills = parseNpmSkillsList(stdout, scope, resolvedCwd);
+
+			return { skills, output: output.slice(0, 4096) };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`bunx skills list failed`, err);
+			// Return empty list with error info instead of throwing
+			return { skills: [], output: `Error: ${msg}` };
+		}
 	}
 }
 
@@ -624,6 +820,110 @@ async function walkSkillFiles(skillDir: string): Promise<SkillFile[]> {
 
 	await recurse(skillDir, "", 0);
 	return out;
+}
+
+// ─── NPM skill helpers ──────────────────────────────────────────────────────
+
+/** List skill directory names under a root. */
+async function listSkillDirs(root: string): Promise<string[]> {
+	try {
+		const entries = await readdir(root, { withFileTypes: true });
+		return entries
+			.filter(e => e.isDirectory() || e.isSymbolicLink())
+			.filter(e => {
+				const name = e.name.toLowerCase();
+				return name !== "node_modules" && !name.startsWith(".");
+			})
+			.map(e => e.name);
+	} catch {
+		return [];
+	}
+}
+
+/** Symlink/copy skills from .agents/skills to .omp/skills for omp discovery. */
+async function syncNpmToOmp(npmRoot: string, ompRoot: string): Promise<void> {
+	try {
+		const skills = await listSkillDirs(npmRoot);
+		await mkdir(ompRoot, { recursive: true });
+		for (const skillName of skills) {
+			const npmSkillDir = path.join(npmRoot, skillName);
+			const ompSkillDir = path.join(ompRoot, skillName);
+			// Skip if already exists
+			try {
+				await stat(ompSkillDir);
+				continue;
+			} catch {
+				// Doesn't exist, create symlink
+			}
+			// Create symlink using fs (junction on Windows, dir symlink on Unix)
+			const rel = path.relative(ompRoot, npmSkillDir);
+			await mkdir(path.dirname(ompSkillDir), { recursive: true });
+			try {
+				await symlink(os.platform() === "win32" ? npmSkillDir : rel, ompSkillDir, os.platform() === "win32" ? "junction" : "dir");
+			} catch {
+				// Symlink failed (e.g. permission), skip silently
+			}
+		}
+	} catch (err) {
+		log.warn(`syncNpmToOmp failed:`, err);
+	}
+}
+
+/** Remove skill symlinks from omp-native root. */
+async function cleanupOmpSkills(ompRoot: string, skillNames: string[]): Promise<void> {
+	for (const name of skillNames) {
+		const ompSkillDir = path.join(ompRoot, name);
+		try {
+			await rm(ompSkillDir, { recursive: true, force: true });
+		} catch {
+			// Ignore cleanup failures
+		}
+	}
+}
+
+/** Parse bunx skills list output into structured entries. */
+function parseNpmSkillsList(output: string, scopeFilter: string, cwd: string): NpmSkillEntry[] {
+	const lines = output.split("\n").filter(l => l.trim());
+	const skills: NpmSkillEntry[] = [];
+
+	// npx skills ls outputs in a tree format like:
+	// .agents/skills/
+	// ├── skill-name (source: owner/repo)
+	// └── another-skill
+	// We parse lines starting with tree markers or containing skill paths
+	for (const line of lines) {
+		// Skip header lines like ".agents/skills/" or "~/.agents/skills/"
+		if (line.trim().endsWith("/skills/") || line.trim().endsWith("/skills")) continue;
+		// Skip empty or separator lines
+		if (!line.includes("─") && !line.includes("│") && !line.includes("├") && !line.includes("└")) continue;
+
+		// Extract skill name from tree line
+		// Format: "├── skill-name" or "│   └── skill-name" or "└── skill-name (source: owner/repo)"
+		const match = line.match(/[├└│─\s]+([a-zA-Z0-9_-]+)/);
+		if (!match) continue;
+
+		const name = match[1];
+		if (!name || name.startsWith(".")) continue;
+
+		// Extract source if present: "(source: owner/repo)"
+		const sourceMatch = line.match(/\(source:\s*([^)]+)\)/);
+		const source = sourceMatch?.[1];
+
+		// Determine scope from the header context
+		// This is approximate - we rely on the root being user or project based on args
+		const skillScope = scopeFilter === "all" ? "project" : (scopeFilter as "user" | "project");
+
+		skills.push({
+			name,
+			path: scopeFilter === "user"
+				? path.join(os.homedir(), ".agents", "skills", name)
+				: path.join(cwd, ".agents", "skills", name),
+			source,
+			scope: skillScope,
+		});
+	}
+
+	return skills;
 }
 
 export type { SkillSummary, SkillFrontmatter, SkillDetailResponse, SkillFile, ListSkillsResponse };

@@ -889,6 +889,92 @@ export interface DeleteSkillResponse {
 	skillPath: string;
 	dirName: string;
 }
+
+// ─── NPM-based skill management (via npx skills CLI) ────────────────────────
+
+/** Source spec for npm skill install. Supports all vercel-labs/skills formats. */
+export interface NpmSkillSource {
+	/** GitHub shorthand (owner/repo), full URL, git URL, or local path. */
+	source: string;
+	/** Optional skill name filter. Use '*' for all skills in the source. */
+	skill?: string;
+}
+
+/** Body for POST /api/skills/npm/add — install skills via npx skills add. */
+export interface InstallSkillFromNpmRequest {
+	/** Skill source to install from. */
+	source: NpmSkillSource;
+	/** Target scope. "user" installs to ~/.agents/skills, "project" to .agents/skills. */
+	scope?: "user" | "project";
+	/** Optional project cwd for project-scope installs. */
+	cwd?: string;
+	/** Skip confirmation prompts (CI/CD friendly). */
+	yes?: boolean;
+	/** Copy files instead of symlinking. */
+	copy?: boolean;
+}
+
+/** Response for POST /api/skills/npm/add. */
+export interface InstallSkillFromNpmResponse {
+	/** Installed skill names. */
+	skills: string[];
+	/** Installation paths. */
+	paths: string[];
+	/** Scope used for installation. */
+	scope: "user" | "project";
+	/** Raw npx output for debugging. */
+	output?: string;
+}
+
+/** Body for POST /api/skills/npm/remove — remove skills via npx skills remove. */
+export interface RemoveSkillFromNpmRequest {
+	/** Skill names to remove. */
+	skills: string[];
+	/** Target scope. */
+	scope?: "user" | "project";
+	/** Optional project cwd for project-scope removal. */
+	cwd?: string;
+	/** Skip confirmation prompts. */
+	yes?: boolean;
+}
+
+/** Response for POST /api/skills/npm/remove. */
+export interface RemoveSkillFromNpmResponse {
+	/** Removed skill names. */
+	skills: string[];
+	/** Scope used for removal. */
+	scope: "user" | "project";
+	/** Raw npx output for debugging. */
+	output?: string;
+}
+
+/** Body for POST /api/skills/npm/list — list skills via npx skills list. */
+export interface ListNpmSkillsRequest {
+	/** Target scope. */
+	scope?: "user" | "project" | "all";
+	/** Optional project cwd. */
+	cwd?: string;
+}
+
+/** One skill entry from npx skills list. */
+export interface NpmSkillEntry {
+	/** Skill name. */
+	name: string;
+	/** Installation path. */
+	path: string;
+	/** Source repo (if tracked). */
+	source?: string;
+	/** Scope (user or project). */
+	scope: "user" | "project";
+}
+
+/** Response for POST /api/skills/npm/list. */
+export interface ListNpmSkillsResponse {
+	/** Listed skills. */
+	skills: NpmSkillEntry[];
+	/** Raw npx output for debugging. */
+	output?: string;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // WebSocket frames
 // ─────────────────────────────────────────────────────────────────────────────

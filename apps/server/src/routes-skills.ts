@@ -10,9 +10,18 @@
  * - `PUT /api/skills/:id` — edit a native skill's SKILL.md body.
  * - `DELETE /api/skills/:id` — delete a native skill's directory.
  * - `POST /api/skills/install` — install a skill from a URL into the native root.
+ * - `POST /api/skills/npm/add` — install skills via `npx skills add` (npm registry).
+ * - `POST /api/skills/npm/remove` — remove npm-installed skills.
+ * - `POST /api/skills/npm/list` — list npm-installed skills.
  */
-
-import type { CreateSkillRequest, InstallSkillFromUrlRequest, UpdateSkillRequest } from "@omp-deck/protocol";
+import type {
+	CreateSkillRequest,
+	InstallSkillFromNpmRequest,
+	InstallSkillFromUrlRequest,
+	ListNpmSkillsRequest,
+	RemoveSkillFromNpmRequest,
+	UpdateSkillRequest,
+} from "@omp-deck/protocol";
 import { Hono } from "hono";
 
 import { broadcastBus } from "./broadcast-bus.ts";
@@ -132,6 +141,69 @@ export function buildSkillsRouter(service: SkillsService): Hono {
 			return c.json({ error: msg }, 500);
 		}
 	});
+
+	// ─── NPM-based skill management (via npx skills CLI) ───────────────────
+
+	app.post("/skills/npm/add", async (c) => {
+		let req: InstallSkillFromNpmRequest;
+		try {
+			req = (await c.req.json()) as InstallSkillFromNpmRequest;
+		} catch {
+			return c.json({ error: "invalid json" }, 400);
+		}
+		if (!req.source?.source) return c.json({ error: "source.source is required" }, 400);
+		try {
+			const result = await service.installFromNpm(req);
+			broadcastBus.broadcast({ type: "skills_changed" });
+			return c.json(result, 201);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const status = getErrorStatus(err);
+			log.error(`installFromNpm failed`, err);
+			if (status) return c.json({ error: msg }, status);
+			return c.json({ error: msg }, 500);
+		}
+	});
+
+	app.post("/skills/npm/remove", async (c) => {
+		let req: RemoveSkillFromNpmRequest;
+		try {
+			req = (await c.req.json()) as RemoveSkillFromNpmRequest;
+		} catch {
+			return c.json({ error: "invalid json" }, 400);
+		}
+		if (!req.skills?.length) return c.json({ error: "skills array is required" }, 400);
+		try {
+			const result = await service.removeFromNpm(req);
+			broadcastBus.broadcast({ type: "skills_changed" });
+			return c.json(result, 200);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const status = getErrorStatus(err);
+			log.error(`removeFromNpm failed`, err);
+			if (status) return c.json({ error: msg }, status);
+			return c.json({ error: msg }, 500);
+		}
+	});
+
+	app.post("/skills/npm/list", async (c) => {
+		let req: ListNpmSkillsRequest;
+		try {
+			req = (await c.req.json()) as ListNpmSkillsRequest;
+		} catch {
+			// Accept empty body
+			req = {};
+		}
+		try {
+			const result = await service.listNpmSkills(req);
+			return c.json(result, 200);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			log.error(`listNpmSkills failed`, err);
+			return c.json({ error: msg }, 500);
+		}
+	});
+
 	return app;
 }
 

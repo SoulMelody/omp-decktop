@@ -48,9 +48,12 @@ export function startSkillsWatcher(config: Config): () => void {
 	const roots = [
 		// Native: user-level OMP skills
 		path.join(home, ".omp", "agent", "skills"),
-		// Native: project-level skills for the deck's default cwd. Other
-		// project cwds get coverage by the manual-refetch path via WS.
+		// Universal Agent Skills standard (Vercel): user-level .agents/skills
+		path.join(home, ".agents", "skills"),
+		// Native: project-level skills for the deck's default cwd
 		path.join(config.defaultCwd, ".omp", "skills"),
+		// Universal Agent Skills standard: project-level .agents/skills
+		path.join(config.defaultCwd, ".agents", "skills"),
 		// Marketplace plugin cache (Claude-plugin format)
 		getPluginsCacheDir(),
 	];
