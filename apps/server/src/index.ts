@@ -28,6 +28,7 @@ import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import { KbProtocolHandler } from "./kb-protocol.ts";
 import { installStarterSkills } from "./starter-skills.ts";
 import { installStarterExtensions } from "./starter-extensions.ts";
+import { refreshDeckExtensionProviders } from "./auth-singleton.ts";
 import { Settings } from "@oh-my-pi/pi-coding-agent";
 import { buildDefaultBridgeSupervisor } from "./bridge-supervisor.ts";
 import {
@@ -101,6 +102,18 @@ async function main(): Promise<void> {
 	// `settings` proxy. Without this the proxy throws "Settings not initialized"
 	// on the first request.
 	await Settings.init();
+
+	// Drain extension-registered providers (~/.omp/agent/extensions/*, including
+	// cc-switch imports) into the shared ModelRegistry at boot, using the
+	// configured workspace cwd. Without this, providers contributed via
+	// `pi.registerProvider()` only reach the registry as a side effect of
+	// `createAgentSession`, so custom models are missing from the new-session
+	// dialog and model-roles page until a session exists. Runs after
+	// `Settings.init()` because `loadCliExtensionProviders` reads the SDK
+	// settings singleton. Fire-and-forget: failures are logged, never block boot.
+	void refreshDeckExtensionProviders(config.defaultCwd).catch((err) => {
+		log.warn(`boot extension provider load failed`, err);
+	});
 
 	const bridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,

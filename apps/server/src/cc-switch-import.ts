@@ -241,21 +241,46 @@ function stripAnnotations(raw: string): string | undefined {
 type FetchedModel = { id: string; name: string };
 
 /**
- * Fetch the live model list from an OpenAI-compatible /v1/models endpoint.
+ * Fetch the live model list from a provider's models endpoint.
+ *
+ * Supports two conventions:
+ *   - OpenAI-compatible: `GET {base}/models`, `Authorization: Bearer <key>`,
+ *     response `{ data: [{ id }] }` (or a bare array / `{ models }`).
+ *   - Anthropic: `GET {base}/v1/models`, `x-api-key: <key>` +
+ *     `anthropic-version: 2023-06-01`, response `{ data: [{ id, display_name }] }`.
+ *
  * Called once during import so the extension file contains a static model list
  * – no runtime fetch, no delay on session start.
  */
 async function fetchModelsFromEndpoint(
 	baseUrl: string,
 	apiKey: string | undefined,
+	apiType: string,
 ): Promise<FetchedModel[]> {
 	const cleanBase = baseUrl.replace(/\/+$/, "");
+	const isAnthropic = apiType === "anthropic-messages";
+
 	const headers: Record<string, string> = {};
-	if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+	if (apiKey) {
+		if (isAnthropic) {
+			headers["x-api-key"] = apiKey;
+			headers["anthropic-version"] = "2023-06-01";
+		} else {
+			headers.Authorization = `Bearer ${apiKey}`;
+		}
+	}
+
+	// Anthropic bases (e.g. https://api.anthropic.com) usually omit the `/v1`
+	// prefix that OpenAI bases carry, so add it when missing.
+	const url = isAnthropic
+		? cleanBase.endsWith("/v1")
+			? `${cleanBase}/models`
+			: `${cleanBase}/v1/models`
+		: `${cleanBase}/models`;
 
 	let response: Response;
 	try {
-		response = await fetch(`${cleanBase}/models`, { headers });
+		response = await fetch(url, { headers });
 	} catch {
 		return [];
 	}
@@ -282,7 +307,9 @@ async function fetchModelsFromEndpoint(
 		const obj = item as Record<string, unknown>;
 		const id = obj.id ?? obj.name ?? obj.model;
 		if (typeof id !== "string" || id.length === 0) continue;
-		result.push({ id, name: id as string });
+		// Anthropic exposes a human label as `display_name`; fall back to id.
+		const displayName = typeof obj.display_name === "string" ? obj.display_name : undefined;
+		result.push({ id, name: displayName && displayName.length > 0 ? displayName : id });
 	}
 	return result;
 }
@@ -386,14 +413,18 @@ export async function writeCcSwitchExtension(provider: CcSwitchProvider): Promis
 	const apiKey = extractApiKey(provider.env, provider.auth);
 	const model = extractModel(provider.env, provider.meta, provider.configIni);
 
-	// Pre-fetch model list for OpenAI-compatible providers.
+	// Pre-fetch model list for providers whose api exposes a models endpoint.
 	let models: FetchedModel[] | undefined;
-	if ((apiType === "openai-completions" || apiType === "openai-responses") && baseUrl) {
-		models = await fetchModelsFromEndpoint(baseUrl, apiKey);
+	const supportsModelFetch =
+		apiType === "openai-completions" ||
+		apiType === "openai-responses" ||
+		apiType === "anthropic-messages";
+	if (supportsModelFetch && baseUrl) {
+		models = await fetchModelsFromEndpoint(baseUrl, apiKey, apiType);
 		if (models.length === 0) {
-			log.warn(`no models returned from ${baseUrl}/models for ${provider.name}`);
+			log.warn(`no models returned from ${baseUrl} models endpoint for ${provider.name}`);
 		} else {
-			log.info(`fetched ${models.length} models from ${baseUrl}/models for ${provider.name}`);
+			log.info(`fetched ${models.length} models from ${baseUrl} for ${provider.name}`);
 		}
 	}
 
