@@ -385,6 +385,7 @@ function SkillDetailPane({
 			await onDeleted();
 		} catch (e) {
 			setLocalError(String((e as Error).message ?? e));
+		} finally {
 			setDeleting(false);
 		}
 	}, [cwd, onDeleted, skill.id]);
