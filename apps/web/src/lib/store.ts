@@ -474,7 +474,7 @@ interface StoreState {
 	cancelQueued(queuedId: string): void;
 	/** Edit a queued prompt's text (and optionally images) in place. */
 	editQueued(queuedId: string, text: string, images?: ImageAttachment[]): void;
-	disposeSession(id: string): Promise<void>;
+	disposeSession(id: string, deleteFile?: boolean): Promise<void>;
 	renameSession(id: string, name: string): Promise<void>;
 	toggleAllToolCards(): void;
 	toggleHideAllToolCards(): void;
@@ -765,9 +765,9 @@ export const useStore = create<StoreState>()(
 			get().ws?.send(frame);
 		},
 
-		async disposeSession(id: string) {
+		async disposeSession(id: string, deleteFile?: boolean) {
 			try {
-				await api.disposeSession(id);
+				await api.disposeSession(id, deleteFile);
 			} catch (err) {
 				console.warn("dispose failed", err);
 			}
@@ -776,6 +776,9 @@ export const useStore = create<StoreState>()(
 				delete next[id];
 				return {
 					sessionsById: next,
+					// Drop the persisted-index row too when the on-disk file is gone,
+					// so the sidebar doesn't show a resume target that no longer exists.
+					sessions: deleteFile ? s.sessions.filter((entry) => entry.id !== id) : s.sessions,
 					activeId: s.activeId === id ? undefined : s.activeId,
 				};
 			});

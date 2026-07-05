@@ -104,6 +104,26 @@ const en = {
 		noSessions: "No sessions yet.",
 		refreshWorkspaces: "Refresh workspaces",
 		refreshSessions: "Refresh sessions",
+		messageCount: "{{count}} msgs",
+		resumeFailed: "Failed to resume: {{error}}",
+		live: "live",
+		deleteSession: "Delete session",
+		planModeActive: "Plan mode active",
+		planBadge: "plan",
+		goalBadge: "goal {{status}}",
+		status: {
+			streaming: "streaming",
+			compact: "compact",
+			retry: "retry",
+		},
+		deleteDialog: {
+			title: "Delete session?",
+			body: "This closes the running session. By default the transcript stays on disk and can be resumed later.",
+			alsoDeleteFile: "Also delete the session file on disk",
+			alsoDeleteFileHint: "Permanent — the transcript cannot be recovered.",
+			confirm: "Delete",
+			confirmWithFile: "Delete permanently",
+		},
 	},
 
 	settings: {

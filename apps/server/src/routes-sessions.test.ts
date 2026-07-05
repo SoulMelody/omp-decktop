@@ -300,3 +300,96 @@ describe("workspace model preference routes", () => {
 		expect(await json(res)).toEqual({ error: "model requires provider and id strings" });
 	});
 });
+
+describe("DELETE /sessions/:id", () => {
+	test("dispose-only on an unknown session returns 404", async () => {
+		const root = bootDb();
+		const config = testConfig(root);
+		const bridge = new FakeBridge();
+		const app = buildTestApp(bridge, config);
+
+		const res = await app.request("/sessions/nope", { method: "DELETE" });
+
+		expect(res.status).toBe(404);
+		expect(await json(res)).toEqual({ error: "session not found" });
+	});
+
+	test("deleteFile=true removes the on-disk transcript found via the persisted index", async () => {
+		const root = bootDb();
+		const config = testConfig(root);
+		const bridge = new FakeBridge();
+		const app = buildTestApp(bridge, config);
+
+		fs.mkdirSync(config.defaultCwd, { recursive: true });
+		const filePath = path.join(config.defaultCwd, "session-abc.jsonl");
+		fs.writeFileSync(filePath, "{}\n");
+		bridge.sessions = [
+			{
+				id: "abc",
+				path: filePath,
+				cwd: config.defaultCwd,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+				messageCount: 0,
+			},
+		];
+
+		const res = await app.request("/sessions/abc?deleteFile=true", { method: "DELETE" });
+
+		expect(res.status).toBe(200);
+		expect(await json(res)).toEqual({ ok: true });
+		expect(fs.existsSync(filePath)).toBe(false);
+	});
+
+	test("deleteFile=true on an unknown session is a no-op success (nothing to delete)", async () => {
+		const root = bootDb();
+		const config = testConfig(root);
+		const bridge = new FakeBridge();
+		const app = buildTestApp(bridge, config);
+
+		const res = await app.request("/sessions/ghost?deleteFile=true", { method: "DELETE" });
+
+		expect(res.status).toBe(200);
+		expect(await json(res)).toEqual({ ok: true });
+	});
+
+	test("deleteFile=true refuses a transcript path outside every allowed root", async () => {
+		// `root` lives under os.tmpdir(), which on Windows resolves under
+		// USERPROFILE — and the guard treats home as an allowed root. Clear
+		// HOME/USERPROFILE for this case so the ONLY allowed roots are the
+		// config's workspace roots, making the "outside" path genuinely outside.
+		const prevHome = process.env.HOME;
+		const prevProfile = process.env.USERPROFILE;
+		delete process.env.HOME;
+		delete process.env.USERPROFILE;
+		try {
+			const root = bootDb();
+			const config = testConfig(root);
+			const bridge = new FakeBridge();
+			const app = buildTestApp(bridge, config);
+
+			const outsideDir = path.join(root, "outside");
+			fs.mkdirSync(outsideDir, { recursive: true });
+			const outside = path.join(outsideDir, "session.jsonl");
+			fs.writeFileSync(outside, "{}\n");
+			bridge.sessions = [
+				{
+					id: "escapee",
+					path: outside,
+					cwd: outsideDir,
+					createdAt: "2026-01-01T00:00:00.000Z",
+					updatedAt: "2026-01-01T00:00:00.000Z",
+					messageCount: 0,
+				},
+			];
+
+			const res = await app.request("/sessions/escapee?deleteFile=true", { method: "DELETE" });
+
+			expect(res.status).toBe(500);
+			expect(fs.existsSync(outside)).toBe(true);
+		} finally {
+			if (prevHome !== undefined) process.env.HOME = prevHome;
+			if (prevProfile !== undefined) process.env.USERPROFILE = prevProfile;
+		}
+	});
+});

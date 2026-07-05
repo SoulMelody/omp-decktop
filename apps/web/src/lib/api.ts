@@ -87,8 +87,9 @@ export const api = {
 			: { method: "POST" };
 		return request(`/sessions/${encodeURIComponent(id)}/compact`, init);
 	},
-	disposeSession(id: string): Promise<{ ok: true }> {
-		return request(`/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+	disposeSession(id: string, deleteFile?: boolean): Promise<{ ok: true }> {
+		const q = deleteFile ? "?deleteFile=true" : "";
+		return request(`/sessions/${encodeURIComponent(id)}${q}`, { method: "DELETE" });
 	},
 	branchPoints(id: string): Promise<{ points: { entryId: string; text: string }[] }> {
 		return request(`/sessions/${encodeURIComponent(id)}/branch-points`);

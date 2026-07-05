@@ -91,6 +91,26 @@ const zhCN = {
 		noSessions: "暂无会话。",
 		refreshWorkspaces: "刷新工作区",
 		refreshSessions: "刷新会话",
+		messageCount: "{{count}} 条消息",
+		resumeFailed: "恢复失败：{{error}}",
+		live: "活跃",
+		deleteSession: "删除会话",
+		planModeActive: "计划模式已启用",
+		planBadge: "计划",
+		goalBadge: "目标 {{status}}",
+		status: {
+			streaming: "生成中",
+			compact: "压缩中",
+			retry: "重试中",
+		},
+		deleteDialog: {
+			title: "删除会话？",
+			body: "这会关闭正在运行的会话。默认情况下，会话记录仍保留在磁盘上，之后可以恢复。",
+			alsoDeleteFile: "同时删除磁盘上的会话文件",
+			alsoDeleteFileHint: "此操作不可逆——会话记录将无法恢复。",
+			confirm: "删除",
+			confirmWithFile: "永久删除",
+		},
 	},
 
 	// ── 设置 ────────────────────────────────────────────────────────────

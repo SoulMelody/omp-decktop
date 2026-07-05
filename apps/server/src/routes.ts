@@ -14,6 +14,7 @@ import type { Config } from "./config.ts";
 import { logger } from "./log.ts";
 import { getBuildInfo, getUptimeSecs } from "./build-info.ts";
 import { getUpdateCheck } from "./update-check.ts";
+import { deleteSessionFile } from "./session-delete.ts";
 import type { AgentBridge } from "./bridge/types.ts";
 
 const log = logger("routes");
@@ -334,10 +335,34 @@ export function buildRouter(
 
 	app.delete("/sessions/:id", async (c) => {
 		const id = c.req.param("id");
+		// `?deleteFile=true` additionally removes the session's on-disk JSONL
+		// history. Default (absent/false) is the historical behavior: dispose
+		// the in-memory handle only, leaving the transcript resumable.
+		const deleteFile = c.req.query("deleteFile") === "true";
+
+		// Resolve the on-disk path BEFORE disposing — a live handle exposes its
+		// own `sessionFile`; otherwise fall back to the persisted index. Never
+		// trust a client-supplied path.
+		let filePath: string | undefined;
 		const handle = bridge.getSession(id);
-		if (!handle) return c.json({ error: "session not found" }, 404);
+		if (deleteFile) {
+			filePath = handle?.sessionFile;
+			if (!filePath) {
+				const summary = (await bridge.listSessions({})).find((s) => s.id === id);
+				filePath = summary?.path;
+			}
+		}
+
 		try {
-			await handle.dispose();
+			// Dispose the live handle if there is one. A purely persisted session
+			// (no handle) is a valid delete-file target, so a missing handle is
+			// only an error when we're not also deleting the file.
+			if (handle) await handle.dispose();
+			else if (!deleteFile) return c.json({ error: "session not found" }, 404);
+
+			if (deleteFile) {
+				await deleteSessionFile(filePath, [config.defaultCwd, ...config.extraWorkspaces]);
+			}
 			return c.json({ ok: true });
 		} catch (err) {
 			log.error(`dispose failed`, err);

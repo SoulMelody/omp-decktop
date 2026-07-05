@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, shortPath, truncate, formatTokens, formatCost } from "@/lib/utils";
 import type { SessionUi, UserMsg, AssistantMsg } from "@/lib/types";
 import { api } from "@/lib/api";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { SessionLaunchModal, type SessionLaunchOpts } from "@/components/chat/SessionLaunchModal";
 
 export function Sidebar() {
+	const { t } = useTranslation();
 	const selectedCwd = useStore((s) => s.selectedWorkspaceCwd);
 	const workspaces = useStore((s) => s.workspaces);
 	const defaultCwd = useStore((s) => s.defaultCwd);
@@ -23,6 +27,12 @@ export function Sidebar() {
 
 	const [creating, setCreating] = useState(false);
 	const [launchOpen, setLaunchOpen] = useState(false);
+	// Session pending deletion — drives the confirm modal. `deleteFile` is the
+	// opt-in "also remove the on-disk transcript" toggle, defaulting off so the
+	// historical dispose-only behavior is the safe default.
+	const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+	const [deleteFile, setDeleteFile] = useState(false);
+	const [deleting, setDeleting] = useState(false);
 
 	const cwdInUse = selectedCwd || defaultCwd;
 
@@ -47,7 +57,7 @@ export function Sidebar() {
 			await createSession({ cwd: cwdInUse, resumeFromPath: p });
 		} catch (err) {
 			console.error(err);
-			alert(`Failed to resume: ${String(err)}`);
+			alert(t("sidebar.resumeFailed", { error: String(err) }));
 		} finally {
 			setCreating(false);
 		}
@@ -66,13 +76,24 @@ export function Sidebar() {
 	const persisted = filtered.filter((s) => !sessionsById[s.id]);
 	const visibleCount = liveSessions.length + persisted.length;
 
-	async function handleDelete(id: string): Promise<void> {
-		if (!confirm("Delete this session?")) return;
+	function handleDelete(id: string): void {
+		// Open the confirm modal; the on-disk toggle resets to off each time so a
+		// prior permanent-delete can't silently carry over to the next session.
+		setPendingDelete(id);
+		setDeleteFile(false);
+	}
+
+	async function confirmDelete(): Promise<void> {
+		if (!pendingDelete) return;
+		setDeleting(true);
 		try {
-			await disposeSession(id);
+			await disposeSession(pendingDelete, deleteFile);
 			void refreshSessions(selectedCwd || undefined);
+			setPendingDelete(null);
 		} catch (err) {
 			console.error("delete session failed", err);
+		} finally {
+			setDeleting(false);
 		}
 	}
 
@@ -80,12 +101,12 @@ export function Sidebar() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="space-y-3 px-3 py-3 border-b border-line">
 				<div className="flex items-center justify-between">
-					<div className="meta">Workspace</div>
+					<div className="meta">{t("sidebar.workspace")}</div>
 					<button
 						type="button"
 						className="text-ink-3 hover:text-ink"
 						onClick={() => void refreshWorkspaces()}
-						aria-label="Refresh workspaces"
+						aria-label={t("sidebar.refreshWorkspaces")}
 					>
 						<RefreshCw className="h-3 w-3" />
 					</button>
@@ -99,7 +120,7 @@ export function Sidebar() {
 					}}
 					className="field h-7 w-full px-2 font-mono text-xs"
 				>
-					<option value="">(all workspaces)</option>
+					<option value="">{t("sidebar.allWorkspaces")}</option>
 					{workspaces.map((w) => (
 						<option key={w.cwd} value={w.cwd}>
 							{w.label} · {w.sessionCount}
@@ -116,17 +137,17 @@ export function Sidebar() {
 					disabled={creating}
 				>
 					<Plus className="h-3.5 w-3.5" />
-					New session
+					{t("sidebar.newSession")}
 				</button>
 			</div>
 
 			<div className="flex items-center justify-between px-3 pt-3 pb-1">
-				<div className="meta">Sessions · {visibleCount}</div>
+				<div className="meta">{t("sidebar.sessions")} · {visibleCount}</div>
 				<button
 					type="button"
 					className="text-ink-3 hover:text-ink"
 					onClick={() => void refreshSessions(selectedCwd || undefined)}
-					aria-label="Refresh sessions"
+					aria-label={t("sidebar.refreshSessions")}
 				>
 					<RefreshCw className="h-3 w-3" />
 				</button>
@@ -162,7 +183,7 @@ export function Sidebar() {
 					<SessionRow
 						key={s.id}
 						title={s.title || truncate(s.preview || "", 52) || formatSessionId(s.id)}
-						subtitle={`${s.messageCount} msgs · ${shortPath(s.cwd, 20)}`}
+						subtitle={`${t("sidebar.messageCount", { count: s.messageCount })} · ${shortPath(s.cwd, 20)}`}
 						meta={formatRelative(s.updatedAt || s.createdAt)}
 						onClick={() => void handleResume(s.path)}
 						onDelete={() => void handleDelete(s.id)}
@@ -171,7 +192,7 @@ export function Sidebar() {
 
 				{visibleCount === 0 ? (
 					<div className="px-3 py-6 text-center font-mono text-2xs text-ink-3">
-						No sessions yet.
+						{t("sidebar.noSessions")}
 					</div>
 				) : null}
 			</div>
@@ -181,6 +202,46 @@ export function Sidebar() {
 				onCancel={() => setLaunchOpen(false)}
 				onConfirm={launchSession}
 			/>
+			<Modal
+				open={pendingDelete !== null}
+				onClose={() => (deleting ? undefined : setPendingDelete(null))}
+				widthClass="max-w-md"
+				heightClass=""
+			>
+				<div className="flex flex-col gap-4 p-5">
+					<div>
+						<h2 className="text-sm font-semibold text-ink">{t("sidebar.deleteDialog.title")}</h2>
+						<p className="mt-1.5 text-xs leading-relaxed text-ink-3">
+							{t("sidebar.deleteDialog.body")}
+						</p>
+					</div>
+
+					<label className="flex cursor-pointer items-start gap-2.5">
+						<input
+							type="checkbox"
+							className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-danger"
+							checked={deleteFile}
+							onChange={(e) => setDeleteFile(e.target.checked)}
+							disabled={deleting}
+						/>
+						<span className="min-w-0">
+							<span className="block text-xs text-ink-2">{t("sidebar.deleteDialog.alsoDeleteFile")}</span>
+							<span className="mt-0.5 block text-2xs text-ink-4">
+								{t("sidebar.deleteDialog.alsoDeleteFileHint")}
+							</span>
+						</span>
+					</label>
+
+					<div className="flex justify-end gap-2">
+						<Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)} disabled={deleting}>
+							{t("common.actions.cancel")}
+						</Button>
+						<Button variant="danger" size="sm" onClick={() => void confirmDelete()} disabled={deleting}>
+							{deleteFile ? t("sidebar.deleteDialog.confirmWithFile") : t("sidebar.deleteDialog.confirm")}
+						</Button>
+					</div>
+				</div>
+			</Modal>
 		</div>
 	);
 }
@@ -272,10 +333,12 @@ function formatRelative(ts: string): string {
 /*  SessionRow                                                 */
 /* ────────────────────────────────────────────────────────── */
 
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-	streaming: { label: "streaming", cls: "bg-accent/10 text-accent" },
-	compacting: { label: "compact", cls: "bg-warn/10 text-warn" },
-	retrying: { label: "retry", cls: "bg-danger/10 text-danger" },
+// `key` indexes into `sidebar.status.*`; the literal label is resolved at
+// render time so the badge follows the active locale.
+const STATUS_LABELS: Record<string, { key: string; cls: string }> = {
+	streaming: { key: "streaming", cls: "bg-accent/10 text-accent" },
+	compacting: { key: "compact", cls: "bg-warn/10 text-warn" },
+	retrying: { key: "retry", cls: "bg-danger/10 text-danger" },
 };
 
 function SessionRow({
@@ -301,6 +364,7 @@ function SessionRow({
 	onClick: () => void;
 	onDelete?: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
@@ -320,7 +384,7 @@ function SessionRow({
 			{/* Title row */}
 			<div className="flex items-center gap-1.5">
 				{live ? (
-					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="live" />
+					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label={t("sidebar.live")} />
 				) : (
 					<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong" />
 				)}
@@ -332,21 +396,21 @@ function SessionRow({
 				<div className="mt-0.5 flex items-center gap-1 pl-3">
 					{live && status && STATUS_LABELS[status] ? (
 						<span className={cn("inline-flex h-4 items-center rounded px-1 font-mono text-[10px] uppercase tracking-meta", STATUS_LABELS[status]!.cls)}>
-							{STATUS_LABELS[status]!.label}
+							{t(STATUS_LABELS[status]!.key)}
 						</span>
 					) : null}
 					{planMode ? (
 						<span className="inline-flex h-4 items-center rounded border border-thinking/40 bg-thinking/10 px-1 font-mono text-[10px] uppercase tracking-meta text-thinking"
-							title="Plan mode active"
+							title={t("sidebar.planModeActive")}
 						>
-							plan
+							{t("sidebar.planBadge")}
 						</span>
 					) : null}
 					{goalMode ? (
 						<span className="inline-flex h-4 items-center rounded border border-accent/40 bg-accent/10 px-1 font-mono text-[10px] uppercase tracking-meta text-accent"
-							title={`Goal ${goalMode.status}`}
+							title={t("sidebar.goalBadge", { status: goalMode.status })}
 						>
-							goal {goalMode.status}
+							{t("sidebar.goalBadge", { status: goalMode.status })}
 						</span>
 					) : null}
 				</div>
@@ -369,7 +433,7 @@ function SessionRow({
 				<span
 					role="button"
 					tabIndex={0}
-					title="Delete session"
+					title={t("sidebar.deleteSession")}
 					onClick={(e) => { e.stopPropagation(); onDelete(); }}
 					onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onDelete(); } }}
 					className="absolute right-1 top-1.5 hidden h-5 w-5 items-center justify-center rounded text-ink-4 hover:bg-danger/10 hover:text-danger group-hover:flex"
