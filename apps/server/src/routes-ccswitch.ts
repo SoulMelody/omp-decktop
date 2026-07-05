@@ -23,12 +23,13 @@ import {
 	resolveCcSwitchDbPath,
 	writeCcSwitchExtension,
 } from "./cc-switch-import.ts";
+import { refreshDeckExtensionProviders } from "./auth-singleton.ts";
 import { broadcastBus } from "./broadcast-bus.ts";
 import { logger } from "./log.ts";
 
 const log = logger("routes-ccswitch");
 
-export function buildCcSwitchRouter(): Hono {
+export function buildCcSwitchRouter(opts: { cwd?: string } = {}): Hono {
 	const app = new Hono();
 
 	// ── GET /providers ──────────────────────────────────────────────────────
@@ -131,6 +132,7 @@ export function buildCcSwitchRouter(): Hono {
 
 		// Notify connected clients that new models may be available.
 		if (okCount > 0) {
+			await refreshDeckExtensionProviders(opts.cwd ?? process.cwd());
 			broadcastBus.broadcast({ type: "models_changed" });
 		}
 

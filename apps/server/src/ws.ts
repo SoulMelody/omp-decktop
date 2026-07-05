@@ -131,7 +131,7 @@ export class WsHub {
 				return;
 
 			case "terminal_open": {
-				const ok = terminalService.start();
+				const ok = terminalService.start(frame.cwd?.trim() || undefined);
 				if (ok) {
 					broadcastBus.broadcast({ type: "terminal_open" });
 				} else {

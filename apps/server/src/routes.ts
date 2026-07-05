@@ -363,7 +363,7 @@ export function buildRouter(
 	app.route("/", buildKbRouter(kb));
 	app.route("/auth/oauth", buildAuthOAuthRouter());
 	app.route("/onboarding", buildOnboardingRouter());
-	app.route("/ccswitch", buildCcSwitchRouter());
+	app.route("/ccswitch", buildCcSwitchRouter({ cwd: config.defaultCwd }));
 	app.route("/mcp", mcpApp);
 	app.route("/", buildTerminalRouter());
 

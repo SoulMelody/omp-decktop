@@ -15,7 +15,12 @@
  * The bridge owns the registry lifecycle (offline refresh on first
  * resolve, background online refresh after that). Routes consume only.
  */
-import { ModelRegistry, discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
+import {
+	ModelRegistry,
+	discoverAuthStorage,
+	loadCliExtensionProviders,
+	settings as ompSettings,
+} from "@oh-my-pi/pi-coding-agent";
 import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { logger } from "./log.ts";
 
@@ -41,4 +46,9 @@ export function getDeckModelRegistry(): Promise<ModelRegistry> {
 export async function getDeckAuthStorage(): Promise<AuthStorage> {
 	const registry = await getDeckModelRegistry();
 	return registry.authStorage;
+}
+
+export async function refreshDeckExtensionProviders(cwd: string): Promise<void> {
+	const registry = await getDeckModelRegistry();
+	await loadCliExtensionProviders(registry, ompSettings, cwd);
 }

@@ -1271,7 +1271,7 @@ export type ClientFrame =
 			tokenBudget?: number;
 	  }
 	// ── Terminal frames ───────────────────────────────────────────────────
-	| { type: "terminal_open" }
+	| { type: "terminal_open"; cwd?: string }
 	| { type: "terminal_data"; data: string }
 	| { type: "terminal_resize"; cols: number; rows: number }
 	| { type: "terminal_close" }

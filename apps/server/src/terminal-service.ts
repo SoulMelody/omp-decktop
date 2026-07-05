@@ -57,23 +57,37 @@ export interface TerminalExitInfo {
 	signalCode?: string;
 }
 
+type TerminalSpawn = typeof Bun.spawn;
+
+interface TerminalServiceDeps {
+	detectShell?: typeof detectShell;
+	spawn?: TerminalSpawn;
+}
+
 export class TerminalService {
 	private proc: Subprocess | null = null;
 	private readonly dataSubscribers = new Set<(data: string) => void>();
 	private readonly exitSubscribers = new Set<(info: TerminalExitInfo) => void>();
+	private readonly detectShell: typeof detectShell;
+	private readonly spawn: TerminalSpawn;
+
+	constructor(deps: TerminalServiceDeps = {}) {
+		this.detectShell = deps.detectShell ?? detectShell;
+		this.spawn = deps.spawn ?? Bun.spawn;
+	}
 
 	isRunning(): boolean {
 		return this.proc !== null && !this.proc.killed;
 	}
 
-	start(): boolean {
+	start(cwd: string = process.cwd()): boolean {
 		if (this.proc && !this.proc.killed) return true;
 
-		const shell = detectShell();
+		const shell = this.detectShell();
 
 		try {
-			this.proc = Bun.spawn([shell, "--login"], {
-				cwd: process.cwd(),
+			this.proc = this.spawn([shell, "--login"], {
+				cwd,
 				env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
 				terminal: {
 					cols: 80,

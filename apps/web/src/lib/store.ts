@@ -507,6 +507,10 @@ interface StoreState {
 	dismissNotification(id: string): void;
 }
 
+export function selectCurrentWorkspaceCwd(state: Pick<StoreState, "selectedWorkspaceCwd" | "defaultCwd">): string {
+	return state.selectedWorkspaceCwd || state.defaultCwd;
+}
+
 export const useStore = create<StoreState>()(
 	subscribeWithSelector((set, get) => ({
 		ws: null,
@@ -829,7 +833,7 @@ export const useStore = create<StoreState>()(
 		setTerminalOpen(open) {
 			// Send terminal_open when opening, terminal_close when closing
 			if (open) {
-				get().ws?.send({ type: "terminal_open" });
+				get().ws?.send({ type: "terminal_open", cwd: selectCurrentWorkspaceCwd(get()) });
 			} else {
 				get().ws?.send({ type: "terminal_close" });
 			}
