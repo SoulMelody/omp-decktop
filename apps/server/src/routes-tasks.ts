@@ -13,6 +13,7 @@ import type {
 	CreateTaskStateRequest,
 	ListTasksResponse,
 	MoveTaskRequest,
+	TaskPriority,
 	UpdateTaskRequest,
 	UpdateTaskStateRequest,
 } from "@omp-deck/protocol";
@@ -35,6 +36,20 @@ import {
 } from "./db/tasks.ts";
 
 const log = logger("routes:tasks");
+const TASK_PRIORITIES: readonly TaskPriority[] = ["P0", "P1", "P2", "P3", "P4", "P5"];
+
+function parsePriorities(raw: string | undefined): TaskPriority[] | undefined {
+	if (!raw) return undefined;
+	const values = raw.split(",").map((v) => v.trim()).filter(Boolean);
+	if (values.length === 0) return undefined;
+	for (const value of values) {
+		if (!TASK_PRIORITIES.includes(value as TaskPriority)) {
+			throw new Error(`invalid priority: ${value}`);
+		}
+	}
+	return values as TaskPriority[];
+}
+
 
 function notifyTasksChanged(): void {
 	broadcastBus.broadcast({ type: "tasks_changed" });
@@ -47,7 +62,14 @@ export function buildTasksRouter(): Hono {
 
 	app.get("/tasks", (c) => {
 		const includeArchived = c.req.query("includeArchived") === "1";
-		const tasks = listTasks({ includeArchived });
+		let priorities: TaskPriority[] | undefined;
+		try {
+			priorities = parsePriorities(c.req.query("priority"));
+		} catch (err) {
+			return c.json({ error: String((err as Error).message ?? err) }, 400);
+		}
+		const sort = c.req.query("sort") === "priority" ? "priority" : undefined;
+		const tasks = listTasks({ includeArchived, priorities, sort });
 		const states = listStates();
 		const body: ListTasksResponse = { tasks, states };
 		return c.json(body);

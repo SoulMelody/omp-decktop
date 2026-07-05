@@ -4,6 +4,7 @@ import {
 	SessionManager,
 	settings as ompSettings,
 	type AgentSession,
+	type CreateAgentSessionResult,
 } from "@oh-my-pi/pi-coding-agent";
 import { getEnvApiKey } from "@oh-my-pi/pi-ai";
 import { runExtensionCompact, runExtensionSetModel } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/compact-handler";
@@ -23,7 +24,7 @@ import { getDeckModelRegistry } from "../auth-singleton.ts";
 import { getEffectivePrelude } from "../orientation-store.ts";
 import { notificationService } from "../notifications/index.ts";
 import { ExtensionUIBridge } from "./ext-ui-bridge.ts";
-import { PlanModeBridge } from "./plan-mode-bridge.ts";
+import { PlanModeBridge, type PlanModeSessionSurface } from "./plan-mode-bridge.ts";
 import type {
 	AgentBridge,
 	CreateSessionOpts,
@@ -33,6 +34,7 @@ import type {
 	RuntimeEnvUpdate,
 	SessionHandle,
 } from "./types.ts";
+
 import { InProcessSessionHandle } from "./session-handle.ts";
 import {
 	type SdkModel,
@@ -41,6 +43,11 @@ import {
 	looksLikeAuthError,
 	modelInfoFromSdk,
 } from "./sdk-helpers.ts";
+
+interface SessionManagerArtifactAccess {
+	getArtifactsDir(): string | null;
+	getSessionId(): string | null;
+}
 
 const log = logger("bridge:in-process");
 
@@ -388,9 +395,11 @@ export class InProcessAgentBridge implements AgentBridge {
 		session: AgentSession,
 		cwd: string,
 		sessionManager: SessionManager,
-		setToolUIContext: import("@oh-my-pi/pi-coding-agent").CreateAgentSessionResult["setToolUIContext"],
+		setToolUIContext: CreateAgentSessionResult["setToolUIContext"],
 	): InProcessSessionHandle {
-		const sessionId = (session as any).sessionId as string;
+		const agentSession = session as AgentSession & { sessionId: string };
+		const sessionId = agentSession.sessionId;
+		const sessionArtifacts = sessionManager as unknown as SessionManagerArtifactAccess;
 		const uiBridge = new ExtensionUIBridge(sessionId);
 		// Wire the per-session UI context into the SDK's tool-context store so
 		// `AskTool.execute(...)` (and any extension calling `ctx.ui.*`) reaches
@@ -399,9 +408,9 @@ export class InProcessAgentBridge implements AgentBridge {
 
 		const planBridge = new PlanModeBridge({
 			sessionId,
-			session: session as unknown as import("./plan-mode-bridge.ts").PlanModeSessionSurface,
-			getArtifactsDir: () => (sessionManager as unknown as { getArtifactsDir: () => string | null }).getArtifactsDir(),
-			getSessionId: () => (sessionManager as unknown as { getSessionId: () => string | null }).getSessionId(),
+			session: session as unknown as PlanModeSessionSurface,
+			getArtifactsDir: () => sessionArtifacts.getArtifactsDir(),
+			getSessionId: () => sessionArtifacts.getSessionId(),
 		});
 
 		const handle = new InProcessSessionHandle({

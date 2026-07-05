@@ -43,12 +43,31 @@ export interface WorkspaceEntry {
 	cwd: string;
 	label: string;
 	sessionCount: number;
+	lastActiveAt?: string;
+	defaultModel?: ModelRef;
+}
+
+export interface WorkspacePreference {
+	cwd: string;
+	model: ModelRef | null;
+}
+
+export interface SetWorkspacePreferenceRequest {
+	cwd: string;
+	model: ModelRef | null;
+}
+
+export interface ListWorkspacePreferencesResponse {
+	preferences: WorkspacePreference[];
+	workspaces?: WorkspaceEntry[];
 }
 
 export interface CreateSessionRequest {
-	cwd: string;
+	cwd?: string;
 	resumeFromPath?: string;
 	model?: ModelRef;
+	/** Start the new session in Plan Mode before any queued first prompt. */
+	planMode?: boolean;
 	/** Do not fire the configured auto-start prompt when this creates a fresh session. */
 	suppressAutoStart?: boolean;
 }
@@ -1407,6 +1426,8 @@ export interface TaskState {
 	isDefault: boolean;
 }
 
+export type TaskPriority = "P0" | "P1" | "P2" | "P3" | "P4" | "P5";
+
 export interface Task {
 	id: string;
 	/** Monotonic deck-wide display number. Render as `T-${displayId}`. */
@@ -1427,6 +1448,7 @@ export interface Task {
 	 * be perfectly accurate before the first post-deploy move.
 	 */
 	stateEnteredAt: string;
+	priority: TaskPriority;
 	archivedAt?: string;
 }
 
@@ -1435,6 +1457,7 @@ export interface CreateTaskRequest {
 	body?: string;
 	stateId?: string;
 	cwd?: string;
+	priority?: TaskPriority;
 }
 
 export interface UpdateTaskRequest {
@@ -1444,6 +1467,7 @@ export interface UpdateTaskRequest {
 	orderInState?: number;
 	cwd?: string;
 	archived?: boolean;
+	priority?: TaskPriority;
 }
 
 export interface ListTasksResponse {

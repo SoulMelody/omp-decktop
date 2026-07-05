@@ -12,6 +12,7 @@ import type {
 	RoutineBudget,
 	RoutineConcurrency,
 	RoutineRun,
+	RoutineSpec,
 } from "@omp-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
@@ -184,7 +185,7 @@ export function createV1Routine(input: {
 	name: string;
 	description?: string;
 	specYaml: string;
-	spec: import("@omp-deck/protocol").RoutineSpec;
+	spec: RoutineSpec;
 	enabled?: boolean;
 }): Routine {
 	const routineId = `r_${id().toLowerCase().slice(0, 18)}`;
@@ -256,7 +257,7 @@ export function updateV1Routine(
 		name?: string;
 		description?: string;
 		specYaml?: string;
-		spec?: import("@omp-deck/protocol").RoutineSpec;
+		spec?: RoutineSpec;
 		enabled?: boolean;
 	},
 ): Routine | undefined {

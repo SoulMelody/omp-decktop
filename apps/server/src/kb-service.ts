@@ -164,6 +164,13 @@ export interface KbServiceOptions {
 	root: string;
 }
 
+export type KbSaveFileResult =
+	| { kind: "ok"; response: KbFileResponse }
+	| { kind: "not-found" }
+	| { kind: "conflict" }
+	| { kind: "invalid-path" }
+	| { kind: "invalid-frontmatter"; message: string };
+
 export class KbService {
 	readonly root: string;
 	private records: FileRecord[] = [];
@@ -404,13 +411,7 @@ export class KbService {
 		subpath: string,
 		content: string,
 		mode: "update" | "create",
-	): Promise<
-		| { kind: "ok"; response: KbFileResponse }
-		| { kind: "not-found" }
-		| { kind: "conflict" }
-		| { kind: "invalid-path" }
-		| { kind: "invalid-frontmatter"; message: string }
-	> {
+	): Promise<KbSaveFileResult> {
 		await this.ensureIndex();
 		const cleanRel = normalizeRel(subpath);
 		if (!cleanRel) return { kind: "invalid-path" };

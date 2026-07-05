@@ -15,8 +15,10 @@ import type { InboxItem, InboxKind } from "@omp-deck/protocol";
 
 import { Layout } from "@/components/Layout";
 import { MarkdownEdit } from "@/components/MarkdownEdit";
+import { SessionLaunchModal, type SessionLaunchOpts } from "@/components/chat/SessionLaunchModal";
 import { inboxApi } from "@/lib/inbox-api";
 import { useStore } from "@/lib/store";
+import { buildFirstPrompt } from "@/lib/first-prompt";
 import { cn } from "@/lib/utils";
 
 const KIND_ORDER: ReadonlyArray<InboxKind> = [
@@ -65,6 +67,7 @@ export function InboxView() {
 	const [filter, setFilter] = useState<Filter>("all");
 	const [includeProcessed, setIncludeProcessed] = useState(false);
 	const [reader, setReader] = useState<ReaderState>({ mode: "empty" });
+	const [launchItem, setLaunchItem] = useState<InboxItem | undefined>();
 
 	// Hide the global inspector — the reader IS the second pane now.
 	useEffect(() => {
@@ -140,28 +143,25 @@ export function InboxView() {
 		}
 	}
 
-	async function openInChat(it: InboxItem): Promise<void> {
-		const cwd = defaultCwd;
-		try {
-			await createSession({ cwd });
-		} catch (e) {
-			console.warn("createSession failed; using draft only", e);
-		}
-		const stamp = new Date(it.createdAt).toLocaleString();
+	async function launchInboxInChat(opts: SessionLaunchOpts): Promise<void> {
+		if (!launchItem) return;
+		const stamp = new Date(launchItem.createdAt).toLocaleString();
 		const draft = [
-			`Inbox · ${it.kind} · captured ${stamp}`,
+			`Inbox · ${launchItem.kind} · captured ${stamp}`,
 			``,
-			`# ${it.title}`,
+			`# ${launchItem.title}`,
 			``,
-			it.body || "(no body)",
+			launchItem.body || "(no body)",
 			``,
 			`---`,
 			`Help me act on this. If it's actionable, propose a concrete next step;`,
 			`if it's a decision needing input, frame the choice; if it should become a`,
 			`task, POST /api/tasks and report the new task id.`,
 		].join("\n");
-		setPendingDraft({ text: draft });
-		navigate("/");
+		const id = await createSession({ cwd: opts.cwd, model: opts.model, planMode: opts.planMode, suppressAutoStart: true });
+		setPendingDraft({ text: buildFirstPrompt({ draft, autoStartCommand: "/start" }) });
+		setLaunchItem(undefined);
+		navigate(`/c/${encodeURIComponent(id)}`);
 	}
 
 	async function promoteToTask(it: InboxItem): Promise<void> {
@@ -184,6 +184,7 @@ export function InboxView() {
 	}
 
 	return (
+		<>
 		<Layout
 			sidebar={
 				<InboxSidebar
@@ -265,7 +266,7 @@ export function InboxView() {
 						) : (
 							<ReaderPane
 								item={reader.item}
-								onOpenInChat={() => void openInChat(reader.item)}
+								onOpenInChat={() => setLaunchItem(reader.item)}
 								onPromote={() => void promoteToTask(reader.item)}
 								onProcess={() => void toggleProcessed(reader.item)}
 								onDelete={() => void removeItem(reader.item)}
@@ -276,9 +277,19 @@ export function InboxView() {
 					</div>
 				</div>
 			}
-			inspector={null}
-			topBar={null}
-		/>
+				inspector={null}
+				topBar={null}
+			/>
+			<SessionLaunchModal
+				open={launchItem !== undefined}
+				title={launchItem ? `Open ${launchItem.kind} in chat` : "Open in chat"}
+				confirmLabel="Open in chat"
+				initialCwd={defaultCwd}
+				showInitialPrompt={false}
+				onCancel={() => setLaunchItem(undefined)}
+				onConfirm={launchInboxInChat}
+			/>
+		</>
 	);
 }
 

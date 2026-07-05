@@ -5,6 +5,7 @@ import type { SessionSummary } from "@omp-deck/protocol";
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { SessionLaunchModal, type SessionLaunchOpts } from "./SessionLaunchModal";
 
 /**
  * Rendered as the chat main pane when there is no active session selected.
@@ -27,6 +28,7 @@ export function SessionPicker() {
 	const [busy, setBusy] = useState(false);
 	const [addingWorkspace, setAddingWorkspace] = useState(false);
 	const [newPath, setNewPath] = useState("");
+	const [launchOpen, setLaunchOpen] = useState(false);
 	const cwdInUse = selectedCwd || defaultCwd;
 
 	async function handleAddWorkspace(): Promise<void> {
@@ -79,13 +81,11 @@ export function SessionPicker() {
 		return { live, persisted };
 	}, [sessions, sessionsById, cwdInUse]);
 
-	async function startFresh(): Promise<void> {
+	async function launchSession(opts: SessionLaunchOpts): Promise<void> {
 		setBusy(true);
 		try {
-			await createSession({ cwd: cwdInUse });
-		} catch (err) {
-			console.error(err);
-			alert(`Failed to create session: ${String(err)}`);
+			await createSession({ cwd: opts.cwd, model: opts.model, planMode: opts.planMode });
+			setLaunchOpen(false);
 		} finally {
 			setBusy(false);
 		}
@@ -172,7 +172,7 @@ export function SessionPicker() {
 					</div>
 					<button
 						type="button"
-						onClick={() => void startFresh()}
+						onClick={() => setLaunchOpen(true)}
 						disabled={busy}
 						className="btn-primary mt-3 h-9 w-full text-sm"
 					>
@@ -247,6 +247,12 @@ export function SessionPicker() {
 					</div>
 				) : null}
 			</div>
+			<SessionLaunchModal
+				open={launchOpen}
+				initialCwd={cwdInUse}
+				onCancel={() => setLaunchOpen(false)}
+				onConfirm={launchSession}
+			/>
 		</div>
 	);
 }

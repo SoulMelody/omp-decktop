@@ -4,6 +4,7 @@ import type {
 	ListTasksResponse,
 	MoveTaskRequest,
 	Task,
+	TaskPriority,
 	TaskState,
 	UpdateTaskRequest,
 	UpdateTaskStateRequest,
@@ -24,9 +25,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const tasksApi = {
-	list(includeArchived = false): Promise<ListTasksResponse> {
-		const q = includeArchived ? "?includeArchived=1" : "";
-		return req<ListTasksResponse>(`/tasks${q}`);
+	list(opts: { includeArchived?: boolean; priorities?: TaskPriority[]; sort?: "priority" } = {}): Promise<ListTasksResponse> {
+		const q = new URLSearchParams();
+		if (opts.includeArchived) q.set("includeArchived", "1");
+		if (opts.priorities?.length) q.set("priority", opts.priorities.join(","));
+		if (opts.sort) q.set("sort", opts.sort);
+		const suffix = q.toString() ? `?${q.toString()}` : "";
+		return req<ListTasksResponse>(`/tasks${suffix}`);
 	},
 	create(body: CreateTaskRequest): Promise<Task> {
 		return req<Task>(`/tasks`, { method: "POST", body: JSON.stringify(body) });

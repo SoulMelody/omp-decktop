@@ -4,8 +4,10 @@ import { subscribeWithSelector } from "zustand/middleware";
 import type {
 	AgentSessionEventJson,
 	ExtUiDialogResponse,
+	ImageAttachment,
 	ListSessionsResponse,
 	ListWorkspacesResponse,
+	ModelRef,
 	NotificationLevel,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
@@ -38,7 +40,7 @@ const MAX_NOTIFICATIONS = 50;
 
 import { api } from "./api";
 import { applyEvent, initSession } from "./reducer";
-import type { SessionUi } from "./types";
+import type { SessionUi, UserMsg } from "./types";
 import { WsClient, type WsStatus } from "./ws";
 
 // ─── Render batching for session events ────────────────────────────────────
@@ -451,9 +453,9 @@ interface StoreState {
 	disconnect(): void;
 	refreshWorkspaces(): Promise<void>;
 	refreshSessions(cwd?: string): Promise<void>;
-	createSession(opts: { cwd: string; resumeFromPath?: string }): Promise<string>;
+	createSession(opts: { cwd?: string; resumeFromPath?: string; model?: ModelRef; planMode?: boolean; suppressAutoStart?: boolean }): Promise<string>;
 	selectSession(id: string): void;
-	sendPrompt(text: string, images?: import("@omp-deck/protocol").ImageAttachment[]): void;
+	sendPrompt(text: string, images?: ImageAttachment[]): void;
 	abort(): void;
 	/** Drop every queued (followUp / steering) prompt for the active session.
 	 *  Server echoes a `queue_cleared` session event that reconciles
@@ -463,7 +465,7 @@ interface StoreState {
 	 *  a `queue_state` session event with the new ordered queue. */
 	cancelQueued(queuedId: string): void;
 	/** Edit a queued prompt's text (and optionally images) in place. */
-	editQueued(queuedId: string, text: string, images?: import("@omp-deck/protocol").ImageAttachment[]): void;
+	editQueued(queuedId: string, text: string, images?: ImageAttachment[]): void;
 	disposeSession(id: string): Promise<void>;
 	renameSession(id: string, name: string): Promise<void>;
 	toggleAllToolCards(): void;
@@ -651,8 +653,11 @@ export const useStore = create<StoreState>()(
 
 		async createSession(opts) {
 			const created = await api.createSession({
-				cwd: opts.cwd,
+				...(opts.cwd ? { cwd: opts.cwd } : {}),
 				...(opts.resumeFromPath ? { resumeFromPath: opts.resumeFromPath } : {}),
+				...(opts.model ? { model: opts.model } : {}),
+				...(opts.planMode ? { planMode: true } : {}),
+				...(opts.suppressAutoStart ? { suppressAutoStart: true } : {}),
 			});
 			// Subscribe immediately; reducer will hydrate from the `subscribed` snapshot.
 			get().ws?.send({ type: "subscribe", sessionId: created.sessionId });
@@ -692,7 +697,7 @@ export const useStore = create<StoreState>()(
 			// the server's `message_start` echo using content + time window.
 			const now = Date.now();
 			const optMsgId = `user-opt-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-			const optMsg: import("./types").UserMsg = {
+			const optMsg: UserMsg = {
 				id: optMsgId,
 				role: "user",
 				text,

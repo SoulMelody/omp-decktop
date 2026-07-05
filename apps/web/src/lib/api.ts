@@ -5,6 +5,7 @@ import type {
 	ListModelsResponse,
 	ListSessionsResponse,
 	ListSlashCommandsResponse,
+	ListWorkspacePreferencesResponse,
 	ListWorkspacesResponse,
 	McpCreateRequest,
 	McpListResponse,
@@ -12,6 +13,7 @@ import type {
 	McpTestResponse,
 	McpUpdateRequest,
 	ModelRef,
+	SetWorkspacePreferenceRequest,
 } from "@omp-deck/protocol";
 import type { FsReadResponse, FsTreeResponse } from "./types";
 const BASE = "/api";
@@ -39,6 +41,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
 	listWorkspaces(): Promise<ListWorkspacesResponse> {
 		return request<ListWorkspacesResponse>("/workspaces");
+	},
+	listWorkspacePreferences(): Promise<ListWorkspacePreferencesResponse> {
+		return request<ListWorkspacePreferencesResponse>("/workspace-preferences");
+	},
+	setWorkspacePreference(cwd: string, model: ModelRef | null): Promise<{ ok: true }> {
+		return request<{ ok: true }>("/workspace-preferences", {
+			method: "PUT",
+			body: JSON.stringify({ cwd, model } satisfies SetWorkspacePreferenceRequest),
+		});
 	},
 	listSessions(cwd?: string): Promise<ListSessionsResponse> {
 		const q = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";

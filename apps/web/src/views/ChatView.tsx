@@ -7,9 +7,11 @@ import { TerminalPanel } from "@/components/TerminalPanel";
 import { useStore } from "@/lib/store";
 import { StatusBar } from "@/components/chrome/StatusBar";
 import { ExtUiDialog } from "@/components/chat/ExtUiDialog";
+import { useSessionRoute } from "@/lib/use-session-route";
 
 export function ChatView() {
 	const terminalOpen = useStore((s) => s.terminalOpen);
+	useSessionRoute();
 
 	return (
 		<>

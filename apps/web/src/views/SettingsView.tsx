@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppearanceSection } from "@/components/settings/AppearanceSection";
 import { ModelRolesSection } from "@/components/settings/ModelRolesSection";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { ModelRef, WorkspaceEntry } from "@omp-deck/protocol";
 
 import { Layout } from "@/components/Layout";
 import { EnvSection } from "@/components/settings/EnvSection";
@@ -13,6 +15,8 @@ import { DapSection } from "@/components/settings/DapSection";
 import { LspSection } from "@/components/settings/LspSection";
 import { SECTIONS, normalizeSection, type SectionId } from "@/components/settings/settings-helpers";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import { modelKey, modelLabel, toModelRef, useModelCatalog } from "@/lib/model-catalog";
 
 export function SettingsView() {
 	const [params, setParams] = useSearchParams();
@@ -69,6 +73,8 @@ export function SettingsView() {
 								<NotificationsSection />
 							) : selected === "modelRoles" ? (
 								<ModelRolesSection />
+							) : selected === "workspaces" ? (
+								<WorkspacesSection />
 							) : selected === "lsp" ? (
 								<LspSection />
 							) : selected === "dap" ? (
@@ -87,7 +93,7 @@ export function SettingsView() {
 function StubSection({
 	section,
 }: {
-	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "appearance" | "notifications" | "modelRoles" | "lsp" | "dap">;
+	section: Exclude<SectionId, "env" | "providers" | "messaging" | "orientation" | "appearance" | "notifications" | "modelRoles" | "workspaces" | "lsp" | "dap">;
 }) {
 	const spec = SECTIONS.find((s) => s.id === section)!;
 	const { t } = useTranslation();
@@ -96,6 +102,94 @@ function StubSection({
 			<div className="meta">{spec.label}</div>
 			<h1 className="mt-2 text-xl font-semibold">{t("settings.stub.heading")}</h1>
 			<p className="mt-1 text-sm text-ink-3">{t("settings.stub.body")}</p>
+		</div>
+	);
+}
+
+function WorkspacesSection() {
+	const [workspaces, setWorkspaces] = useState<WorkspaceEntry[]>([]);
+	const [saving, setSaving] = useState<string | undefined>();
+	const [error, setError] = useState<string | undefined>();
+	const { models, loading } = useModelCatalog();
+
+	const availableModels = useMemo(() => models.filter((m) => m.info.isAvailable), [models]);
+
+	const load = useCallback(async () => {
+		setError(undefined);
+		try {
+			const resp = await api.listWorkspaces();
+			setWorkspaces(resp.workspaces);
+		} catch (err) {
+			setError(String((err as Error).message ?? err));
+		}
+	}, []);
+
+	useEffect(() => {
+		void load();
+	}, [load]);
+
+	async function setDefault(cwd: string, model: ModelRef | null): Promise<void> {
+		setSaving(cwd);
+		setError(undefined);
+		try {
+			await api.setWorkspacePreference(cwd, model);
+			await load();
+		} catch (err) {
+			setError(String((err as Error).message ?? err));
+		} finally {
+			setSaving(undefined);
+		}
+	}
+
+	return (
+		<div className="mx-auto max-w-4xl space-y-4">
+			<div>
+				<div className="meta">Workspaces</div>
+				<h1 className="mt-2 text-xl font-semibold text-ink">Workspace defaults</h1>
+				<p className="mt-1 text-sm text-ink-3">Choose the model preselected for each workspace. Launch-time choices still override this default.</p>
+			</div>
+			{error ? <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-xs text-danger">{error}</div> : null}
+			<div className="overflow-hidden rounded-md border border-line bg-paper">
+				<table className="w-full text-sm">
+					<thead className="bg-paper-2 text-left meta">
+						<tr>
+							<th className="px-3 py-2">Workspace</th>
+							<th className="px-3 py-2">Default model</th>
+							<th className="px-3 py-2">Sessions</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-line">
+						{workspaces.map((workspace) => (
+							<tr key={workspace.cwd}>
+								<td className="px-3 py-2">
+									<div className="font-medium text-ink">{workspace.label}</div>
+									<div className="truncate font-mono text-2xs text-ink-3">{workspace.cwd}</div>
+								</td>
+								<td className="px-3 py-2">
+									<select
+										value={workspace.defaultModel ? modelKey(workspace.defaultModel) : ""}
+										onChange={(event) => {
+											const selected = availableModels.find((entry) => modelKey(entry.ref) === event.target.value);
+											void setDefault(workspace.cwd, selected ? toModelRef(selected.info) : null);
+										}}
+										disabled={saving === workspace.cwd || loading}
+										className="field h-8 w-full max-w-md px-2 font-mono text-xs"
+									>
+										<option value="">SDK default</option>
+										{availableModels.map((entry) => (
+											<option key={modelKey(entry.ref)} value={modelKey(entry.ref)}>
+												{entry.ref.providerName ?? entry.ref.provider} / {entry.info.label}
+											</option>
+										))}
+									</select>
+									<div className="mt-1 font-mono text-2xs text-ink-3">{modelLabel(workspace.defaultModel)}</div>
+								</td>
+								<td className="px-3 py-2 font-mono text-xs text-ink-3">{workspace.sessionCount}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	);
 }

@@ -1,9 +1,18 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Task } from "@omp-deck/protocol";
+import type { Task, TaskPriority } from "@omp-deck/protocol";
 import { formatBriefTime } from "@/lib/time";
 import { cn, truncate } from "@/lib/utils";
 
+
+const PRIORITY_CLASS: Record<TaskPriority, string> = {
+	P0: "border-danger/40 bg-danger/10 text-danger",
+	P1: "border-warn/40 bg-warn/10 text-warn",
+	P2: "border-accent/40 bg-accent-soft text-accent",
+	P3: "border-line bg-paper-3 text-ink-2",
+	P4: "border-line bg-paper-3 text-ink-3",
+	P5: "border-line bg-paper text-ink-4",
+};
 interface Props {
 	task: Task;
 	onOpen: (task: Task) => void;
@@ -93,6 +102,7 @@ export function TaskCardBody({ task, lifted }: { task: Task; lifted: boolean }) 
 		>
 			<div className="flex items-baseline gap-2 font-mono text-[10px] uppercase tracking-meta text-ink-3">
 				<span>T-{task.displayId}</span>
+				<span className={cn("rounded border px-1 py-0.5", PRIORITY_CLASS[task.priority])}>{task.priority}</span>
 				{brief ? (
 					<time
 						dateTime={stamp}

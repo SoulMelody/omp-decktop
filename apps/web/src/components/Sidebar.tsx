@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { cn, shortPath, truncate, formatTokens, formatCost } from "@/lib/utils";
 import type { SessionUi, UserMsg, AssistantMsg } from "@/lib/types";
 import { api } from "@/lib/api";
+import { SessionLaunchModal, type SessionLaunchOpts } from "@/components/chat/SessionLaunchModal";
 
 export function Sidebar() {
 	const selectedCwd = useStore((s) => s.selectedWorkspaceCwd);
@@ -21,6 +22,7 @@ export function Sidebar() {
 
 
 	const [creating, setCreating] = useState(false);
+	const [launchOpen, setLaunchOpen] = useState(false);
 
 	const cwdInUse = selectedCwd || defaultCwd;
 
@@ -29,13 +31,11 @@ export function Sidebar() {
 		return sessions.filter((s) => s.cwd === selectedCwd);
 	}, [sessions, selectedCwd]);
 
-	async function handleNew(): Promise<void> {
+	async function launchSession(opts: SessionLaunchOpts): Promise<void> {
 		setCreating(true);
 		try {
-			await createSession({ cwd: cwdInUse });
-		} catch (err) {
-			console.error(err);
-			alert(`Failed to create session: ${String(err)}`);
+			await createSession({ cwd: opts.cwd, model: opts.model, planMode: opts.planMode });
+			setLaunchOpen(false);
 		} finally {
 			setCreating(false);
 		}
@@ -112,7 +112,7 @@ export function Sidebar() {
 				<button
 					type="button"
 					className="btn-primary h-8 w-full text-[13px]"
-					onClick={() => void handleNew()}
+					onClick={() => setLaunchOpen(true)}
 					disabled={creating}
 				>
 					<Plus className="h-3.5 w-3.5" />
@@ -174,6 +174,12 @@ export function Sidebar() {
 					</div>
 				) : null}
 			</div>
+			<SessionLaunchModal
+				open={launchOpen}
+				initialCwd={cwdInUse}
+				onCancel={() => setLaunchOpen(false)}
+				onConfirm={launchSession}
+			/>
 		</div>
 	);
 }

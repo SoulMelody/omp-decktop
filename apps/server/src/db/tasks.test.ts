@@ -3,6 +3,7 @@
  * SQLite database under `os.tmpdir()` per test so the migrations run end-to-end.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -11,6 +12,7 @@ import { closeDb, openDb } from "./index.ts";
 import {
 	createState,
 	createTask,
+	getTask,
 	listStates,
 	listTasks,
 	moveTask,
@@ -169,5 +171,99 @@ describe("state_entered_at + recency sort", () => {
 
 		const done = listTasks().filter((t) => t.stateId === "s_done");
 		expect(done.map((t) => t.id)).toEqual([a.id, b.id]);
+	});
+});
+
+describe("task priority", () => {
+	test("createTask defaults priority to P5 and preserves explicit priority", () => {
+		bootDb();
+
+		const defaulted = createTask({ title: "default priority" });
+		const urgent = createTask({ title: "urgent priority", priority: "P0" });
+
+		expect(defaulted.priority).toBe("P5");
+		expect(urgent.priority).toBe("P0");
+		expect(listTasks().find((t) => t.id === defaulted.id)?.priority).toBe("P5");
+		expect(listTasks().find((t) => t.id === urgent.id)?.priority).toBe("P0");
+	});
+
+	test("updateTask changes priority without rewriting the title", () => {
+		bootDb();
+		const task = createTask({ title: "deploy blocker", priority: "P3" });
+
+		const updated = updateTask(task.id, { priority: "P1" });
+
+		expect(updated?.priority).toBe("P1");
+		expect(updated?.title).toBe("deploy blocker");
+		expect(getTask(task.id)?.priority).toBe("P1");
+	});
+
+	test("listTasks filters to P0/P1 and sorts highest priority first", () => {
+		bootDb();
+		const p5 = createTask({ title: "eventually", priority: "P5" });
+		const p1 = createTask({ title: "soon", priority: "P1" });
+		const p0 = createTask({ title: "now", priority: "P0" });
+		const p3 = createTask({ title: "later", priority: "P3" });
+
+		const tasks = listTasks({ priorities: ["P0", "P1"], sort: "priority" });
+
+		expect(tasks.map((t) => t.id)).toEqual([p0.id, p1.id]);
+		expect(tasks.map((t) => t.priority)).toEqual(["P0", "P1"]);
+		expect(tasks.some((t) => t.id === p5.id || t.id === p3.id)).toBe(false);
+	});
+
+	test("migration backfills [P0]-[P3] title prefixes into priority and strips prefixes", () => {
+		dbDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-deck-tasks-priority-migration-"));
+		const dbPath = path.join(dbDir, "deck.db");
+		const db = new Database(dbPath);
+		try {
+			db.exec(`
+				CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
+				INSERT INTO schema_migrations (name, applied_at) VALUES
+					('001-init.sql', '2026-01-01T00:00:00.000Z'),
+					('002-display-ids.sql', '2026-01-01T00:00:00.000Z'),
+					('003-routines-v1.sql', '2026-01-01T00:00:00.000Z'),
+					('004-state-entered-at.sql', '2026-01-01T00:00:00.000Z');
+				CREATE TABLE task_states (
+					id TEXT PRIMARY KEY,
+					name TEXT NOT NULL UNIQUE,
+					color TEXT NOT NULL DEFAULT '#6e6a62',
+					position INTEGER NOT NULL,
+					is_default INTEGER NOT NULL DEFAULT 0
+				);
+				INSERT INTO task_states (id, name, color, position, is_default)
+				VALUES ('s_backlog', 'backlog', '#6e6a62', 100, 1);
+				CREATE TABLE tasks (
+					id TEXT PRIMARY KEY,
+					display_id INTEGER,
+					title TEXT NOT NULL,
+					body TEXT NOT NULL DEFAULT '',
+					state_id TEXT NOT NULL REFERENCES task_states(id) ON DELETE RESTRICT,
+					order_in_state INTEGER NOT NULL,
+					cwd TEXT,
+					created_at TEXT NOT NULL,
+					updated_at TEXT NOT NULL,
+					state_entered_at TEXT NOT NULL,
+					archived_at TEXT
+				);
+				CREATE TABLE sequences (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
+				INSERT INTO sequences (name, value) VALUES ('tasks', 4);
+				INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at)
+				VALUES
+					('t_p0', 1, '[P0] production down', '', 's_backlog', 100, NULL, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', NULL),
+					('t_p1', 2, '[P1] launch blocker', '', 's_backlog', 200, NULL, '2026-01-01T00:01:00.000Z', '2026-01-01T00:01:00.000Z', '2026-01-01T00:01:00.000Z', NULL),
+					('t_p3', 3, '[P3] polish copy', '', 's_backlog', 300, NULL, '2026-01-01T00:02:00.000Z', '2026-01-01T00:02:00.000Z', '2026-01-01T00:02:00.000Z', NULL),
+					('t_plain', 4, 'plain task', '', 's_backlog', 400, NULL, '2026-01-01T00:03:00.000Z', '2026-01-01T00:03:00.000Z', '2026-01-01T00:03:00.000Z', NULL);
+			`);
+		} finally {
+			db.close();
+		}
+
+		openDb({ path: dbPath });
+
+		expect(getTask("t_p0")).toMatchObject({ title: "production down", priority: "P0" });
+		expect(getTask("t_p1")).toMatchObject({ title: "launch blocker", priority: "P1" });
+		expect(getTask("t_p3")).toMatchObject({ title: "polish copy", priority: "P3" });
+		expect(getTask("t_plain")).toMatchObject({ title: "plain task", priority: "P5" });
 	});
 });

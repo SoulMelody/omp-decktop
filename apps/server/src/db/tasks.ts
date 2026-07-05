@@ -6,7 +6,7 @@
  * tricks. A move == one transaction that renumbers the destination column.
  */
 
-import type { Task, TaskState } from "@omp-deck/protocol";
+import type { Task, TaskPriority, TaskState } from "@omp-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
 
@@ -21,6 +21,7 @@ interface TaskRow {
 	created_at: string;
 	updated_at: string;
 	state_entered_at: string;
+	priority: TaskPriority;
 	archived_at: string | null;
 }
 
@@ -42,6 +43,7 @@ function rowToTask(r: TaskRow): Task {
 		orderInState: r.order_in_state,
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
+		priority: r.priority,
 		stateEnteredAt: r.state_entered_at,
 	};
 	if (r.cwd !== null) t.cwd = r.cwd;
@@ -198,23 +200,34 @@ export function deleteState(stateId: string): { reassigned: number } {
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
 
-export function listTasks(opts: { includeArchived?: boolean } = {}): Task[] {
-	const where = opts.includeArchived ? "" : "WHERE archived_at IS NULL";
+export function listTasks(opts: { includeArchived?: boolean; priorities?: TaskPriority[]; sort?: "priority" } = {}): Task[] {
+	const clauses: string[] = [];
+	const params: TaskPriority[] = [];
+	if (!opts.includeArchived) clauses.push("archived_at IS NULL");
+	if (opts.priorities && opts.priorities.length > 0) {
+		clauses.push(`priority IN (${opts.priorities.map(() => "?").join(", ")})`);
+		params.push(...opts.priorities);
+	}
+	const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+	const orderBy =
+		opts.sort === "priority"
+			? "ORDER BY CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 WHEN 'P4' THEN 4 ELSE 5 END, state_id, state_entered_at DESC, order_in_state ASC"
+			: "ORDER BY state_id, state_entered_at DESC, order_in_state ASC";
 	const rows = getDb()
-		.query<TaskRow, []>(
-			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at
+		.query<TaskRow, TaskPriority[]>(
+			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, priority, archived_at
 			 FROM tasks
 			 ${where}
-			 ORDER BY state_id, state_entered_at DESC, order_in_state ASC`,
+			 ${orderBy}`,
 		)
-		.all() as TaskRow[];
+		.all(...params) as TaskRow[];
 	return rows.map(rowToTask);
 }
 
 export function getTask(taskId: string): Task | undefined {
 	const row = getDb()
 		.query<TaskRow, [string]>(
-			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at
+			`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, priority, archived_at
 			 FROM tasks WHERE id = ?`,
 		)
 		.get(taskId) as TaskRow | null;
@@ -226,6 +239,7 @@ export function createTask(input: {
 	body?: string;
 	stateId?: string;
 	cwd?: string;
+	priority?: TaskPriority;
 }): Task {
 	const db = getDb();
 	const state = input.stateId ? getState(input.stateId) : getDefaultState();
@@ -248,10 +262,11 @@ export function createTask(input: {
 			.get() as { value: number } | null;
 		if (!seqRow) throw new Error("tasks sequence missing — migration 002 not applied");
 		displayId = seqRow.value;
-		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string]>(
-			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, input.cwd ?? null, now, now, now);
+		const priority = input.priority ?? "P5";
+		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string, TaskPriority]>(
+			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, priority)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, input.cwd ?? null, now, now, now, priority);
 	})();
 	const out = getTask(taskId);
 	if (!out) throw new Error("createTask failed");
@@ -267,6 +282,7 @@ export function updateTask(
 		orderInState?: number;
 		cwd?: string;
 		archived?: boolean;
+		priority?: TaskPriority;
 	},
 ): Task | undefined {
 	const existing = getTask(taskId);
@@ -282,10 +298,10 @@ export function updateTask(
 	const stateEnteredAt = stateChanged ? nowIso() : existing.stateEnteredAt;
 	db.prepare<
 		unknown,
-		[string, string, string, number, string | null, string, string, string | null, string]
+		[string, string, string, number, string | null, TaskPriority, string, string, string | null, string]
 	>(
 		`UPDATE tasks
-		   SET title = ?, body = ?, state_id = ?, order_in_state = ?, cwd = ?,
+		   SET title = ?, body = ?, state_id = ?, order_in_state = ?, cwd = ?, priority = ?,
 		       updated_at = ?, state_entered_at = ?, archived_at = ?
 		 WHERE id = ?`,
 	).run(
@@ -294,6 +310,7 @@ export function updateTask(
 		next.stateId,
 		next.orderInState,
 		next.cwd ?? null,
+		next.priority,
 		nowIso(),
 		stateEnteredAt,
 		archivedAt,
@@ -383,7 +400,7 @@ export function findTaskByDisplayOrId(ref: string): Task | undefined {
 		if (!Number.isFinite(num)) return undefined;
 		const row = getDb()
 			.query<TaskRow, [number]>(
-				`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, archived_at
+				`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, priority, archived_at
 				 FROM tasks WHERE display_id = ?`,
 			)
 			.get(num) as TaskRow | null;

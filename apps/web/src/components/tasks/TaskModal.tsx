@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Archive, MessageSquarePlus, RotateCcw, Trash2, X } from "lucide-react";
-import type { Task, TaskState } from "@omp-deck/protocol";
+import type { Task, TaskPriority, TaskState } from "@omp-deck/protocol";
 
 import { MarkdownEdit } from "@/components/MarkdownEdit";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 
+
+const TASK_PRIORITIES: readonly TaskPriority[] = ["P0", "P1", "P2", "P3", "P4", "P5"];
 interface Props {
 	task: Task | null;
 	states: TaskState[];
 	onClose: () => void;
-	onSave: (patch: { title?: string; body?: string; stateId?: string; cwd?: string }) => void;
+	onSave: (patch: { title?: string; body?: string; stateId?: string; cwd?: string; priority?: TaskPriority }) => void;
 	onDelete: () => void;
 	onArchive: () => void;
 	onOpenInChat: () => void;
@@ -38,12 +40,14 @@ export function TaskModal({
 	const [title, setTitle] = useState("");
 	const [stateId, setStateId] = useState("");
 	const [cwd, setCwd] = useState("");
+	const [priority, setPriority] = useState<TaskPriority>("P5");
 
 	useEffect(() => {
 		if (!task) return;
 		setTitle(task.title);
 		setStateId(task.stateId);
 		setCwd(task.cwd ?? "");
+		setPriority(task.priority);
 	}, [task]);
 
 	if (!task) return null;
@@ -61,6 +65,11 @@ export function TaskModal({
 		if (!task) return;
 		const next = cwd.trim() || undefined;
 		if ((task.cwd ?? "") !== (next ?? "")) onSave({ cwd: next });
+	}
+	function commitPriority(next: TaskPriority): void {
+		setPriority(next);
+		if (!task || next === task.priority) return;
+		onSave({ priority: next });
 	}
 
 	const isArchived = Boolean(task.archivedAt);
@@ -86,6 +95,16 @@ export function TaskModal({
 							states.find((s) => s.id === stateId)?.color ?? "var(--ink-3, #6e6a62)",
 					}}
 				/>
+				<select
+					value={priority}
+					onChange={(e) => commitPriority(e.target.value as TaskPriority)}
+					className="field h-8 px-2 font-mono text-2xs uppercase tracking-meta"
+					title="Priority"
+				>
+					{TASK_PRIORITIES.map((p) => (
+						<option key={p} value={p}>{p}</option>
+					))}
+				</select>
 				<div className="ml-auto flex shrink-0 items-center gap-1">
 					<IconAction
 						label={isArchived ? "Unarchive" : "Archive"}
@@ -125,6 +144,8 @@ export function TaskModal({
 					<span>{new Date(task.createdAt).toLocaleString()}</span>
 					<span className="text-ink-4">updated</span>
 					<span>{new Date(task.updatedAt).toLocaleString()}</span>
+					<span className="text-ink-4">priority</span>
+					<span>{task.priority}</span>
 					<span className="text-ink-4">cwd</span>
 					<span className="col-span-3">
 						<input

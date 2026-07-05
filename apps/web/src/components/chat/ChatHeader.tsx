@@ -6,6 +6,7 @@ import { cn, shortPath } from "@/lib/utils";
 import { BranchMenu } from "./BranchMenu";
 import { ContextIndicator } from "./ContextIndicator";
 import { ModelPickerModal } from "./ModelPickerModal";
+import { SessionLaunchModal, type SessionLaunchOpts } from "./SessionLaunchModal";
 /**
  * Sticky header row above the chat scroll area when a session is selected.
  * Shows the session name (click to rename) + a small dropdown listing other
@@ -32,6 +33,7 @@ function Inner({ session }: { session: SessionUi }) {
 	const [renameError, setRenameError] = useState<string | undefined>(undefined);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [modelOpen, setModelOpen] = useState(false);
+	const [launchOpen, setLaunchOpen] = useState(false);
 	const switcherRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -71,6 +73,11 @@ function Inner({ session }: { session: SessionUi }) {
 				setRenameError(compact || "Rename failed");
 			},
 		);
+	}
+
+	async function launchSession(opts: SessionLaunchOpts): Promise<void> {
+		await createSession({ cwd: opts.cwd, model: opts.model, planMode: opts.planMode });
+		setLaunchOpen(false);
 	}
 
 	const otherSessions = Object.values(sessionsById).filter((s) => s.sessionId !== session.sessionId);
@@ -198,13 +205,9 @@ function Inner({ session }: { session: SessionUi }) {
 					<div className="absolute right-0 top-full mt-1 w-72 rounded-md border border-line bg-paper-2 shadow-[0_8px_24px_-8px_rgba(26,24,20,0.25)]">
 						<button
 							type="button"
-							onClick={async () => {
+							onClick={() => {
 								setSwitcherOpen(false);
-								try {
-									await createSession({ cwd: defaultCwd });
-								} catch (err) {
-									console.error(err);
-								}
+								setLaunchOpen(true);
 							}}
 							className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-sm text-accent hover:bg-paper-3/60"
 						>
@@ -242,6 +245,12 @@ function Inner({ session }: { session: SessionUi }) {
 				) : null}
 			</div>
 
+			<SessionLaunchModal
+				open={launchOpen}
+				initialCwd={session.cwd || defaultCwd}
+				onCancel={() => setLaunchOpen(false)}
+				onConfirm={launchSession}
+			/>
 			<ModelPickerModal
 				open={modelOpen}
 				sessionId={session.sessionId}

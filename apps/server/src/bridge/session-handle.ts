@@ -8,13 +8,17 @@ import { executeAcpBuiltinSlashCommand } from "@oh-my-pi/pi-coding-agent/slash-c
 import type {
 	AgentMessageJson,
 	AgentSessionEventJson,
+	ContextUsage,
+	ImageAttachment,
 	ModelRef,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
+	QueuedPromptWire,
 	SessionSnapshot,
 } from "@omp-deck/protocol";
 
 import { logger } from "../log.ts";
+import type { DeckSlashResult } from "../deck-slash-commands.ts";
 import { resolveProviderName } from "../provider-names.ts";
 import { PlanModeBridge } from "./plan-mode-bridge.ts";
 import type {
@@ -58,7 +62,7 @@ export class InProcessSessionHandle implements SessionHandle {
 	 * for cancel/edit targeting, so client and server agree without a
 	 * separate id mapping table.
 	 */
-	private shadowQueue: import("@omp-deck/protocol").QueuedPromptWire[] = [];
+	private shadowQueue: QueuedPromptWire[] = [];
 
 	constructor(args: {
 		session: AgentSession;
@@ -172,13 +176,13 @@ export class InProcessSessionHandle implements SessionHandle {
 		return snap;
 	}
 
-	getContextUsage(): import("@omp-deck/protocol").ContextUsage | undefined {
+	getContextUsage(): ContextUsage | undefined {
 		// The SDK exposes `session.getContextUsage()` returning
 		// `{ tokens: number | null, contextWindow: number, percent: number | null }`
 		// or `undefined` when the model has no declared window. We pass it through
 		// verbatim — the deck's protocol type mirrors the SDK shape.
 		const s = this.session as unknown as {
-			getContextUsage?: () => import("@omp-deck/protocol").ContextUsage | undefined;
+			getContextUsage?: () => ContextUsage | undefined;
 		};
 		if (typeof s.getContextUsage !== "function") return undefined;
 		try {
@@ -290,7 +294,7 @@ export class InProcessSessionHandle implements SessionHandle {
 
 	async dispatchDeckSlashCommand(text: string): Promise<SlashDispatchResult> {
 		if (!text.startsWith("/")) return { kind: "fallthrough" };
-		let result: import("../deck-slash-commands.ts").DeckSlashResult | "fallthrough";
+		let result: DeckSlashResult | "fallthrough";
 		try {
 			const { executeDeckSlashCommand } = await import("../deck-slash-commands.ts");
 			result = await executeDeckSlashCommand(text, { cwd: this.cwd });
@@ -364,7 +368,7 @@ export class InProcessSessionHandle implements SessionHandle {
 
 	async prompt(
 		text: string,
-		opts?: { streamingBehavior?: "steer" | "followUp"; images?: import("@omp-deck/protocol").ImageAttachment[] },
+		opts?: { streamingBehavior?: "steer" | "followUp"; images?: ImageAttachment[] },
 	): Promise<void> {
 		// Snapshot the streaming flag BEFORE calling the SDK so we can tell
 		// whether the SDK queued this prompt (was streaming) or ran it immediately.
@@ -382,7 +386,7 @@ export class InProcessSessionHandle implements SessionHandle {
 			// slash/template expansion) so head-drain matching survives expansion.
 			// Falls back to the raw text when the SDK doesn't expose getQueuedMessages.
 			const storedText = this.readLastQueuedText(behavior) ?? text;
-			const entry: import("@omp-deck/protocol").QueuedPromptWire = {
+			const entry: QueuedPromptWire = {
 				id: queuedId,
 				text: storedText,
 				behavior,
@@ -412,7 +416,7 @@ export class InProcessSessionHandle implements SessionHandle {
 		return typeof s.queuedMessageCount === "number" ? s.queuedMessageCount : 0;
 	}
 
-	getQueueSnapshot(): import("@omp-deck/protocol").QueuedPromptWire[] {
+	getQueueSnapshot(): QueuedPromptWire[] {
 		return [...this.shadowQueue];
 	}
 
@@ -445,7 +449,7 @@ export class InProcessSessionHandle implements SessionHandle {
 	async editQueuedById(
 		id: string,
 		text: string,
-		images?: import("@omp-deck/protocol").ImageAttachment[],
+		images?: ImageAttachment[],
 	): Promise<boolean> {
 		const idx = this.shadowQueue.findIndex((q) => q.id === id);
 		if (idx < 0) return false;
@@ -468,7 +472,7 @@ export class InProcessSessionHandle implements SessionHandle {
 	 */
 	private async rebuildQueueExcept(
 		targetIdx: number,
-		replace: { text: string; images?: import("@omp-deck/protocol").ImageAttachment[] } | undefined,
+		replace: { text: string; images?: ImageAttachment[] } | undefined,
 	): Promise<void> {
 		const sdk = this.session as unknown as {
 			popLastQueuedMessage?: () => string | undefined;
@@ -479,12 +483,12 @@ export class InProcessSessionHandle implements SessionHandle {
 		}
 		// Capture survivors with original ids preserved. The edited entry
 		// keeps its id so the deck bubble doesn't re-key.
-		const survivors: import("@omp-deck/protocol").QueuedPromptWire[] = [];
+		const survivors: QueuedPromptWire[] = [];
 		for (let i = 0; i < this.shadowQueue.length; i++) {
 			const entry = this.shadowQueue[i]!;
 			if (i === targetIdx) {
 				if (!replace) continue;
-				const next: import("@omp-deck/protocol").QueuedPromptWire = {
+				const next: QueuedPromptWire = {
 					id: entry.id,
 					text: replace.text,
 					behavior: entry.behavior,
@@ -557,13 +561,13 @@ export class InProcessSessionHandle implements SessionHandle {
 	 * keep their id; any extras get a fresh uuid.
 	 */
 	private resyncShadowFromSdk(
-		previous: import("@omp-deck/protocol").QueuedPromptWire[],
-	): import("@omp-deck/protocol").QueuedPromptWire[] {
+		previous: QueuedPromptWire[],
+	): QueuedPromptWire[] {
 		const q = this.readQueuedTextsByBehavior();
 		const ordered: { text: string; behavior: "steer" | "followUp" }[] = [];
 		for (const t of q.steering) ordered.push({ text: t, behavior: "steer" });
 		for (const t of q.followUp) ordered.push({ text: t, behavior: "followUp" });
-		const out: import("@omp-deck/protocol").QueuedPromptWire[] = [];
+		const out: QueuedPromptWire[] = [];
 		for (let i = 0; i < ordered.length; i++) {
 			const prev = previous[i];
 			const e = ordered[i]!;

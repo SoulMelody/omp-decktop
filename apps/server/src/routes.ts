@@ -5,6 +5,7 @@ import type {
 	ListModelsResponse,
 	ListSessionsResponse,
 	ListWorkspacesResponse,
+	ModelRef,
 	RestartServerResponse,
 	WorkspaceEntry,
 } from "@omp-deck/protocol";
@@ -43,6 +44,7 @@ import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
 import type { SkillsService } from "./skills-service.ts";
 import type { KbService } from "./kb-service.ts";
+import { getWorkspacePreference, listWorkspacePreferences, setWorkspacePreference } from "./db/workspace-preferences.ts";
 
 export function buildRouter(
 	bridge: AgentBridge,
@@ -79,21 +81,34 @@ export function buildRouter(
 	app.get("/workspaces", async (c) => {
 		const allSessions = await bridge.listSessions({});
 		const counts = new Map<string, number>();
+		const lastActive = new Map<string, string>();
 		for (const s of allSessions) {
 			if (!s.cwd) continue;
 			counts.set(s.cwd, (counts.get(s.cwd) ?? 0) + 1);
+			const prev = lastActive.get(s.cwd);
+			if (!prev || s.updatedAt > prev) lastActive.set(s.cwd, s.updatedAt);
 		}
+
+		const prefs = listWorkspacePreferences();
+		const prefsByCwd = new Map(prefs.map((p) => [p.cwd, p.model]));
 
 		// Always include default + extras even if zero sessions.
 		const known = new Set<string>([config.defaultCwd, ...config.extraWorkspaces]);
 		for (const cwd of counts.keys()) known.add(cwd);
+		for (const cwd of prefsByCwd.keys()) known.add(cwd);
 
 		const workspaces: WorkspaceEntry[] = Array.from(known)
-			.map((cwd) => ({
-				cwd,
-				label: deriveLabel(cwd),
-				sessionCount: counts.get(cwd) ?? 0,
-			}))
+			.map((cwd) => {
+				const defaultModel = prefsByCwd.get(cwd) ?? undefined;
+				const lastActiveAt = lastActive.get(cwd);
+				return {
+					cwd,
+					label: deriveLabel(cwd),
+					sessionCount: counts.get(cwd) ?? 0,
+					...(lastActiveAt ? { lastActiveAt } : {}),
+					...(defaultModel ? { defaultModel } : {}),
+				};
+			})
 			.sort((a, b) => b.sessionCount - a.sessionCount || a.label.localeCompare(b.label));
 
 		const body: ListWorkspacesResponse = {
@@ -101,6 +116,34 @@ export function buildRouter(
 			defaultCwd: config.defaultCwd,
 		};
 		return c.json(body);
+	});
+
+	app.get("/workspace-preferences", (c) => {
+		return c.json({ preferences: listWorkspacePreferences() });
+	});
+
+	app.put("/workspace-preferences", async (c) => {
+		let body: { cwd?: unknown; model?: unknown };
+		try {
+			body = (await c.req.json()) as { cwd?: unknown; model?: unknown };
+		} catch {
+			return c.json({ error: "invalid json body" }, 400);
+		}
+		if (typeof body.cwd !== "string" || body.cwd.trim().length === 0) {
+			return c.json({ error: "cwd is required" }, 400);
+		}
+		const cwd = body.cwd.trim();
+		if (body.model !== null) {
+			if (!body.model || typeof body.model !== "object") {
+				return c.json({ error: "model requires provider and id strings" }, 400);
+			}
+			const candidate = body.model as { provider?: unknown; id?: unknown };
+			if (typeof candidate.provider !== "string" || typeof candidate.id !== "string") {
+				return c.json({ error: "model requires provider and id strings" }, 400);
+			}
+			return c.json(setWorkspacePreference(cwd, { provider: candidate.provider, id: candidate.id }));
+		}
+		return c.json(setWorkspacePreference(cwd, null));
 	});
 
 	app.get("/sessions", async (c) => {
@@ -123,16 +166,23 @@ export function buildRouter(
 			return c.json({ error: "invalid json body" }, 400);
 		}
 
+		if (body.resumeFromPath && (body.model || body.planMode)) {
+			return c.json({ error: "resumeFromPath cannot be combined with model or planMode" }, 400);
+		}
+
 		const cwd = body.cwd?.trim() || config.defaultCwd;
+		const workspaceDefaultModel = body.model ? undefined : getWorkspacePreference(cwd)?.model;
+		const model = body.model ?? workspaceDefaultModel;
 
 		try {
 			const handle = body.resumeFromPath
 				? await bridge.resumeSession({ sessionPath: body.resumeFromPath })
 				: await bridge.createSession({
 						cwd,
-						...(body.model ? { model: body.model } : {}),
+						...(model ? { model } : {}),
 						...(body.suppressAutoStart ? { suppressAutoStart: true } : {}),
 					});
+			if (!body.resumeFromPath && body.planMode) await handle.setPlanMode(true);
 			const resp: CreateSessionResponse = {
 				sessionId: handle.sessionId,
 				sessionFile: handle.sessionFile,

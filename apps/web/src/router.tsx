@@ -47,6 +47,7 @@ const router = createBrowserRouter([
 		element: <OnboardingGate />,
 		children: [
 			{ path: "/", element: <ChatView /> },
+			{ path: "/c/:sessionId", element: <ChatView /> },
 			{ path: "/tasks", element: <TasksView /> },
 			{ path: "/routines", element: <RoutinesView /> },
 			{ path: "/routines/:id/runs/:runId", element: <RunDetailView /> },
@@ -55,7 +56,7 @@ const router = createBrowserRouter([
 			{ path: "/skills", element: <SkillsView /> },
 			{ path: "/kb", element: <KbView /> },
 			{ path: "/integrations", element: <IntegrationsView /> },
-{ path: "/files", element: <FilesView /> },
+			{ path: "/files", element: <FilesView /> },
 			{ path: "/settings", element: <SettingsView /> },
 			{ path: "/onboarding", element: <OnboardingView /> },
 		],

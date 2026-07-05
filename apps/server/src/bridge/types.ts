@@ -8,6 +8,7 @@ import type {
 	ModelRef,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
+	QueuedPromptWire,
 	ServerFrame,
 	SessionSnapshot,
 	SessionSummary,
@@ -105,7 +106,7 @@ export interface SessionHandle {
 	getBranchPoints(): Array<{ entryId: string; text: string }>;
 	prompt(
 		text: string,
-		opts?: { streamingBehavior?: "steer" | "followUp"; images?: import("@omp-deck/protocol").ImageAttachment[] },
+		opts?: { streamingBehavior?: "steer" | "followUp"; images?: ImageAttachment[] },
 	): Promise<void>;
 	/** True iff a turn is currently in-flight. Used by the WS layer to decide
 	 *  whether a freshly-arrived prompt is being queued vs. running immediately. */
@@ -121,7 +122,7 @@ export interface SessionHandle {
 	 * mirrored from the SDK). Includes stable `id`s the client can use to
 	 * target a specific entry for cancel/edit. Empty when no turn is in flight.
 	 */
-	getQueueSnapshot(): import("@omp-deck/protocol").QueuedPromptWire[];
+	getQueueSnapshot(): QueuedPromptWire[];
 	/**
 	 * Cancel a single queued prompt by its `id`. Returns true if an entry
 	 * was removed, false if the id was unknown (already drained, etc).
@@ -139,7 +140,7 @@ export interface SessionHandle {
 	editQueuedById(
 		id: string,
 		text: string,
-		images?: import("@omp-deck/protocol").ImageAttachment[],
+		images?: ImageAttachment[],
 	): Promise<boolean>;
 	abort(): Promise<void>;
 	setName(name: string): Promise<void>;

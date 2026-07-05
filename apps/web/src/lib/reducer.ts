@@ -6,7 +6,7 @@
  * boundary stays narrow.
  */
 
-import type { AgentSessionEventJson, SessionSnapshot } from "@omp-deck/protocol";
+import type { AgentSessionEventJson, ContextUsage, SessionSnapshot } from "@omp-deck/protocol";
 
 import type {
 	AssistantContentBlock,
@@ -86,7 +86,7 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 		// or compaction-complete, carrying the freshly-computed context-window
 		// utilization. Lets the header indicator update without re-snapshotting.
 		case "context_usage": {
-			const usage = (event as { contextUsage?: import("@omp-deck/protocol").ContextUsage }).contextUsage;
+			const usage = readContextUsage(event);
 			if (!usage) return state;
 			return { ...state, contextUsage: usage };
 		}
@@ -522,6 +522,14 @@ function taskConfigFor(parent: ToolCallStream, subagentId: string, eventIndex: u
 		description: typeof task?.description === "string" ? task.description : undefined,
 		agent: typeof parent.args?.agent === "string" ? parent.args.agent : undefined,
 	};
+}
+
+function readContextUsage(event: AgentSessionEventJson): ContextUsage | undefined {
+	if (!event || typeof event !== "object" || !("contextUsage" in event)) return undefined;
+	const usage = event.contextUsage;
+	if (!usage || typeof usage !== "object") return undefined;
+	if (!("contextWindow" in usage) || typeof usage.contextWindow !== "number") return undefined;
+	return usage as ContextUsage;
 }
 
 function stringOr(value: unknown, fallback: string | undefined): string | undefined {

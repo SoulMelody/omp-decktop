@@ -6,9 +6,10 @@
  */
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 
 import { logger } from "./log.ts";
-import type { KbService } from "./kb-service.ts";
+import type { KbSaveFileResult, KbService } from "./kb-service.ts";
 
 const log = logger("routes:kb");
 
@@ -143,8 +144,8 @@ export function buildKbRouter(service: KbService): Hono {
 
 /** Map a `KbService.saveFile` outcome to an HTTP response. */
 function saveResultResponse(
-	c: import("hono").Context,
-	result: Awaited<ReturnType<import("./kb-service.ts").KbService["saveFile"]>>,
+	c: Context,
+	result: KbSaveFileResult,
 ): Response {
 	switch (result.kind) {
 		case "ok":
