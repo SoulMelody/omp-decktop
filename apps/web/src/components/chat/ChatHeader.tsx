@@ -3,6 +3,7 @@ import { ChevronDown, Plus } from "lucide-react";
 import type { SessionUi } from "@/lib/types";
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
+import { firstUserMessage, lastUserMessage, lastConversationMessage, formatSessionId } from "@/lib/session-display";
 import { BranchMenu } from "./BranchMenu";
 import { ContextIndicator } from "./ContextIndicator";
 import { ModelPickerModal } from "./ModelPickerModal";
@@ -141,7 +142,7 @@ function Inner({ session }: { session: SessionUi }) {
 					title="Click to rename"
 					className="min-w-0 flex-1 truncate text-left text-[13px] font-medium text-ink hover:text-accent"
 				>
-					{session.sessionName || `Untitled · ${shortId(session.sessionId)}`}
+					{session.sessionName || lastUserMessage(session) || lastConversationMessage(session) || firstUserMessage(session) || formatSessionId(session.sessionId)}
 				</button>
 			)}
 
@@ -237,7 +238,7 @@ function Inner({ session }: { session: SessionUi }) {
 					/>
 				</button>
 				{switcherOpen ? (
-					<div className="absolute right-0 top-full mt-1 w-72 rounded-md border border-line bg-paper-2 shadow-[0_8px_24px_-8px_rgba(26,24,20,0.25)]">
+					<div className="absolute right-0 top-full z-30 mt-1 w-72 rounded-md border border-line bg-paper-2 shadow-[0_8px_24px_-8px_rgba(26,24,20,0.25)]">
 						<button
 							type="button"
 							onClick={() => {
@@ -266,7 +267,7 @@ function Inner({ session }: { session: SessionUi }) {
 											className="block w-full px-3 py-1.5 text-left text-sm hover:bg-paper-3/60"
 										>
 											<div className="truncate text-ink">
-												{s.sessionName || `Untitled · ${shortId(s.sessionId)}`}
+												{s.sessionName || lastUserMessage(s) || lastConversationMessage(s) || firstUserMessage(s) || formatSessionId(s.sessionId)}
 											</div>
 											<div className="truncate font-mono text-2xs text-ink-3">
 												{shortPath(s.cwd, 48)}
@@ -298,6 +299,4 @@ function Inner({ session }: { session: SessionUi }) {
 	);
 }
 
-function shortId(id: string): string {
-	return id.length <= 8 ? id : id.slice(0, 6);
-}
+

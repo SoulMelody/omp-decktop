@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, shortPath, truncate, formatTokens, formatCost } from "@/lib/utils";
-import type { SessionUi, UserMsg, AssistantMsg } from "@/lib/types";
+import type { SessionUi } from "@/lib/types";
+import { firstUserMessage, lastUserMessage, lastConversationMessage, formatSessionId } from "@/lib/session-display";
 import { api } from "@/lib/api";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -246,50 +247,8 @@ export function Sidebar() {
 	);
 }
 
-/* ────────────────────────────────────────────────────────── */
-/*  Helpers                                                    */
-/* ────────────────────────────────────────────────────────── */
 
-/** Extract the first user message text from a live session. */
-function firstUserMessage(s: SessionUi): string {
-	for (const m of s.messages) {
-		if (m.role === "user") {
-			const um = m as UserMsg;
-			const text = um.text.replace(/\n/g, " ").trim();
-			if (text) return truncate(text, 52);
-		}
-	}
-	return "";
-}
 
-/** Extract the last user message text from a live session. */
-function lastUserMessage(s: SessionUi): string {
-	for (let i = s.messages.length - 1; i >= 0; i--) {
-		const m = s.messages[i];
-		if (!m || m.role !== "user") continue;
-		const text = (m as UserMsg).text.replace(/\n/g, " ").trim();
-		if (text) return truncate(text, 52);
-	}
-	return "";
-}
-
-/**
- * Extract the last meaningful assistant message from a live session.
- * Walks backward so the most recent exchange wins.
- */
-function lastConversationMessage(s: SessionUi): string {
-	for (let i = s.messages.length - 1; i >= 0; i--) {
-		const m = s.messages[i];
-		if (!m || m.role !== "assistant") continue;
-		const am = m as AssistantMsg;
-		const textBlock = am.blocks.find((b) => b.type === "text");
-		if (textBlock?.type === "text") {
-			const text = textBlock.text.replace(/\n/g, " ").trim();
-			if (text) return truncate(text, 52);
-		}
-	}
-	return "";
-}
 
 /** Build the meta line for a live session: "3t · 12.4k tok · $0.042" */
 function buildLiveMeta(s: SessionUi): string {
@@ -299,12 +258,6 @@ function buildLiveMeta(s: SessionUi): string {
 	if (s.usage.cost > 0) parts.push(formatCost(s.usage.cost));
 	return parts.join(" · ");
 }
-
-function formatSessionId(id: string): string {
-	if (id.length <= 8) return id;
-	return `${id.slice(0, 4)}…${id.slice(-4)}`;
-}
-
 const RELATIVE_THRESHOLDS: Array<[number, string]> = [
 	[60_000, "just now"],
 	[3_600_000, "m"],

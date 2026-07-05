@@ -128,12 +128,12 @@ export function SessionPicker() {
 							}}
 							className="field h-8 flex-1 px-2 font-mono text-xs"
 						>
-							<option value="">{`(default) ${defaultCwd}`}</option>
+							<option value="">{`(default) ${shortPath(defaultCwd, 40)}`}</option>
 							{workspaces
 								.filter((w) => w.cwd !== defaultCwd)
 								.map((w) => (
 									<option key={w.cwd} value={w.cwd}>
-										{w.label} · {w.cwd}
+										{w.label} · {shortPath(w.cwd, 36)}
 									</option>
 								))}
 						</select>
@@ -228,7 +228,7 @@ export function SessionPicker() {
 									>
 										<Clock className="h-3.5 w-3.5 shrink-0 text-ink-4" />
 										<span className="flex-1 truncate text-ink">
-											{s.title || formatSessionId(s.id)}
+										{s.title || s.preview?.slice(0, 52) || formatSessionId(s.id)}
 										</span>
 										<span className="font-mono text-2xs text-ink-4">
 											{shortPath(s.cwd, 24)} · {s.messageCount}m
