@@ -111,24 +111,50 @@ export function SkillsView() {
 	}, [loadDetail, selected?.id, skillsChangeCounter]);
 
 	const submitInstall = useCallback(async (): Promise<void> => {
-		if (!installUrl.trim()) {
-			setInstallError("URL is required.");
+		const source = installUrl.trim();
+		if (!source) {
+			setInstallError("Source is required.");
 			return;
 		}
 		setInstallSubmitting(true);
 		setInstallError(undefined);
 		try {
-			const result = await skillsApi.installFromUrl({
-				url: installUrl.trim(),
-				scope: installScope,
-				...(installScope === "project" && currentCwd ? { cwd: currentCwd } : {}),
-			});
-			setInstallDialogOpen(false);
-			setInstallUrl("");
-			setInstallScope("user");
-			await refresh();
-			setSelectedId(result.id);
-			setMobileDetailOpen(true);
+			// Detect source type: URL vs npm/github shorthand
+			const isUrl = source.startsWith("http://") || source.startsWith("https://");
+			const cwd = installScope === "project" && currentCwd ? currentCwd : undefined;
+
+			if (isUrl) {
+				// URL-based install (direct SKILL.md URL)
+				const result = await skillsApi.installFromUrl({
+					url: source,
+					scope: installScope,
+					...(cwd ? { cwd } : {}),
+				});
+				setInstallDialogOpen(false);
+				setInstallUrl("");
+				setInstallScope("user");
+				await refresh();
+				setSelectedId(result.id);
+				setMobileDetailOpen(true);
+			} else {
+				// npm/github shorthand install via bunx skills add
+				const result = await skillsApi.installFromNpm({
+					source: { source },
+					scope: installScope,
+					...(cwd ? { cwd } : {}),
+				});
+				setInstallDialogOpen(false);
+				setInstallUrl("");
+				setInstallScope("user");
+				await refresh();
+				// Select the first installed skill
+				if (result.skills.length > 0) {
+					const skillPath = result.paths[0] ?? "";
+					// The id is the encoded path - we need to find it in the refreshed list
+					await refresh();
+				}
+				setMobileDetailOpen(true);
+			}
 		} catch (e) {
 			setInstallError(String((e as Error).message ?? e));
 		} finally {
@@ -166,7 +192,7 @@ export function SkillsView() {
 								className="inline-flex items-center gap-1 rounded-md border border-line bg-paper-2 px-2.5 py-1.5 text-xs text-ink-2 transition-colors hover:bg-paper-3 hover:text-ink"
 							>
 								<Link className="h-3.5 w-3.5" />
-								Install from URL
+								Install
 							</button>
 							<div className="flex items-center gap-2 rounded-md border border-line bg-paper-2 px-2 py-1 text-xs">
 								<Search className="h-3.5 w-3.5 text-ink-3" />
@@ -708,7 +734,7 @@ function InstallFromUrlDialog({
 			<div className="w-full max-w-xl rounded-lg border border-line bg-paper shadow-2xl">
 				<div className="flex items-center gap-2 border-b border-line px-4 py-3">
 					<Link className="h-4 w-4 text-accent" />
-					<div className="text-sm font-medium text-ink">Install skill from URL</div>
+					<div className="text-sm font-medium text-ink">Install skill</div>
 					<button
 						type="button"
 						onClick={onClose}
@@ -720,13 +746,16 @@ function InstallFromUrlDialog({
 				</div>
 				<div className="space-y-4 px-4 py-4">
 					<div>
-						<label className="font-mono text-2xs uppercase tracking-meta text-ink-4">URL</label>
+						<label className="font-mono text-2xs uppercase tracking-meta text-ink-4">Source</label>
 						<input
 							value={url}
 							onChange={(e) => onUrlChange(e.target.value)}
-							placeholder="https://github.com/owner/repo/blob/main/SKILL.md or raw SKILL.md URL"
+							placeholder="owner/repo, https://github.com/owner/repo, or SKILL.md URL"
 							className="mt-1 w-full rounded-md border border-line bg-paper-2 px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none"
 						/>
+						<div className="mt-1 text-xs text-ink-4">
+							URLs install directly; GitHub shorthand (owner/repo) uses bunx skills add
+						</div>
 					</div>
 					<div>
 						<label className="font-mono text-2xs uppercase tracking-meta text-ink-4">Scope</label>
@@ -778,7 +807,6 @@ function InstallFromUrlDialog({
 		</div>
 	);
 }
-
 function DefRow({ k, v }: { k: string; v: React.ReactNode }) {
 	return (
 		<div>

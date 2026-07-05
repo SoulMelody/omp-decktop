@@ -2,8 +2,11 @@ import type {
 	CreateSkillRequest,
 	CreateSkillResponse,
 	DeleteSkillResponse,
+	InstallSkillFromNpmRequest,
+	InstallSkillFromNpmResponse,
 	InstallSkillFromUrlRequest,
 	InstallSkillFromUrlResponse,
+	ListNpmSkillsResponse,
 	ListSkillsResponse,
 	SkillDetailResponse,
 	UpdateSkillRequest,
@@ -58,6 +61,18 @@ export const skillsApi = {
 		return req<InstallSkillFromUrlResponse>("/skills/install", {
 			method: "POST",
 			body: JSON.stringify(body),
+		});
+	},
+	installFromNpm(body: InstallSkillFromNpmRequest): Promise<InstallSkillFromNpmResponse> {
+		return req<InstallSkillFromNpmResponse>("/skills/npm/add", {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+	},
+	listNpm(scope?: "user" | "project" | "all"): Promise<ListNpmSkillsResponse> {
+		return req<ListNpmSkillsResponse>("/skills/npm/list", {
+			method: "POST",
+			body: JSON.stringify({ scope }),
 		});
 	},
 };
