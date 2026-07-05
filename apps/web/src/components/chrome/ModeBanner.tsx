@@ -1,12 +1,13 @@
+import type { GoalModeContextWire } from "@omp-deck/protocol";
 import type { SessionUi } from "@/lib/types";
 
 interface Props {
 	mode: SessionUi["mode"];
-	goal: SessionUi["goal"];
+	goalMode?: GoalModeContextWire;
 }
 
-export function ModeBanner({ mode, goal }: Props) {
-	if (!mode && !goal) return null;
+export function ModeBanner({ mode, goalMode }: Props) {
+	if (!mode && !goalMode) return null;
 	return (
 		<section className="border-b border-line px-4 py-4">
 			<div className="meta mb-2">Mode</div>
@@ -21,14 +22,12 @@ export function ModeBanner({ mode, goal }: Props) {
 						) : null}
 					</div>
 				) : null}
-				{goal && typeof goal === "object" && (goal as { goal?: unknown }).goal ? (
+				{goalMode ? (
 					<div className="text-ink-2 normal-case tracking-normal">
 						<span className="text-ink-3">goal: </span>
-						{String(
-							(goal as { goal?: { description?: unknown; summary?: unknown } }).goal?.description ??
-								(goal as { goal?: { description?: unknown; summary?: unknown } }).goal?.summary ??
-								"(set)",
-						)}
+						<span className="text-accent">{goalMode.status}</span>
+						<span className="text-ink-3"> — </span>
+						<span className="truncate">{goalMode.objective}</span>
 					</div>
 				) : null}
 			</div>

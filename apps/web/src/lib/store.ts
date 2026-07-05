@@ -4,6 +4,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 import type {
 	AgentSessionEventJson,
 	ExtUiDialogResponse,
+	GoalModeContextWire,
 	ImageAttachment,
 	ListSessionsResponse,
 	ListWorkspacesResponse,
@@ -494,6 +495,12 @@ interface StoreState {
 		approved: boolean;
 		editedContent?: string;
 	}): void;
+	/**
+	 * Send a goal-mode action for the active session. `create` starts a new
+	 * autonomous goal; `pause`/`resume`/`cancel` control the lifecycle;
+	 * `set_budget` adjusts the token ceiling. Server broadcasts `goal_updated`.
+	 */
+	actOnGoal(action: "create" | "pause" | "resume" | "cancel" | "set_budget", options?: { objective?: string; tokenBudget?: number }): void;
 	/** Mark a notification as delivered to the OS so the renderer only fires once. */
 	markNotificationDelivered(id: string): void;
 	/** Hide an in-app toast for a notification (does not affect an already-delivered OS notif). */
@@ -883,6 +890,18 @@ export const useStore = create<StoreState>()(
 			});
 		},
 
+		actOnGoal(action, options) {
+			const id = get().activeId;
+			if (!id) return;
+			get().ws?.send({
+				type: "goal_action",
+				sessionId: id,
+				action,
+				...(options?.objective !== undefined ? { objective: options.objective } : {}),
+				...(options?.tokenBudget !== undefined ? { tokenBudget: options.tokenBudget } : {}),
+			});
+		},
+
 		markNotificationDelivered(id) {
 			set((s) => {
 				const i = s.notifications.findIndex((n) => n.id === id);
@@ -1038,6 +1057,20 @@ function handleFrame(
 					sessionsById: {
 						...s.sessionsById,
 						[frame.sessionId]: { ...prev, pendingPlanApproval: undefined },
+					},
+				};
+			});
+			return;
+
+		case "goal_updated":
+			set((s) => {
+				const prev = s.sessionsById[frame.sessionId];
+				if (!prev) return {};
+				const goalMode: GoalModeContextWire | undefined = frame.goal ?? undefined;
+				return {
+					sessionsById: {
+						...s.sessionsById,
+						[frame.sessionId]: { ...prev, goalMode },
 					},
 				};
 			});

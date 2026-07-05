@@ -147,6 +147,7 @@ export function Sidebar() {
 							live
 							status={s.status}
 							planMode={s.planMode?.enabled === true}
+							goalMode={s.goalMode}
 							onClick={() => selectSession(s.sessionId)}
 							onDelete={() => void handleDelete(s.sessionId)}
 						/>
@@ -285,6 +286,7 @@ function SessionRow({
 	live,
 	status,
 	planMode,
+	goalMode,
 	onClick,
 	onDelete,
 }: {
@@ -295,6 +297,7 @@ function SessionRow({
 	live?: boolean;
 	status?: string;
 	planMode?: boolean;
+	goalMode?: { status: string };
 	onClick: () => void;
 	onDelete?: () => void;
 }) {
@@ -325,7 +328,7 @@ function SessionRow({
 			</div>
 
 			{/* Status badges row */}
-			{live && status && STATUS_LABELS[status] || planMode ? (
+			{live && status && STATUS_LABELS[status] || planMode || goalMode ? (
 				<div className="mt-0.5 flex items-center gap-1 pl-3">
 					{live && status && STATUS_LABELS[status] ? (
 						<span className={cn("inline-flex h-4 items-center rounded px-1 font-mono text-[10px] uppercase tracking-meta", STATUS_LABELS[status]!.cls)}>
@@ -337,6 +340,13 @@ function SessionRow({
 							title="Plan mode active"
 						>
 							plan
+						</span>
+					) : null}
+					{goalMode ? (
+						<span className="inline-flex h-4 items-center rounded border border-accent/40 bg-accent/10 px-1 font-mono text-[10px] uppercase tracking-meta text-accent"
+							title={`Goal ${goalMode.status}`}
+						>
+							goal {goalMode.status}
 						</span>
 					) : null}
 				</div>

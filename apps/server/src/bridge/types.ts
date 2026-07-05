@@ -3,6 +3,7 @@ import type {
 	AgentSessionEventJson,
 	ContextUsage,
 	ExtUiDialogResponse,
+	GoalModeContextWire,
 	ImageAttachment,
 	ModelInfo,
 	ModelRef,
@@ -186,6 +187,10 @@ export interface SessionHandle {
 		proposalId: string,
 		response: PlanApprovalResponse,
 	): Promise<"settled" | "unknown">;
+	/** Goal mode actions: create, pause, resume, cancel, set_budget. */
+	actOnGoal(action: import("./goal-mode-bridge.ts").GoalAction): Promise<void>;
+	/** Read the bridge's goal-mode context for snapshot replay. */
+	getGoalModeContext(): GoalModeContextWire | undefined;
 	dispose(): Promise<void>;
 }
 

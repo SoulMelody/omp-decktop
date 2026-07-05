@@ -12,6 +12,7 @@ function makeHandle(stub: Record<string, unknown>) {
 		sessionId: "s1",
 		getModelRegistry: async () => ({}) as never,
 		planBridge: { getPlanModeContext: () => undefined, getPendingPlanApproval: () => undefined } as never,
+		goalBridge: { subscribe: () => () => {}, getContext: () => undefined, act: async () => {}, dispose: () => {} } as never,
 		onDispose: () => {},
 	});
 	handle.subscribe((e) => events.push(e));

@@ -986,6 +986,20 @@ export interface PlanModeContextWire {
 }
 
 /**
+ * Live goal-mode state for a session. Mirrors the SDK's goal-mode runtime
+ * state. Absent on a snapshot means goal mode is off / never started.
+ */
+export interface GoalModeContextWire {
+	enabled: boolean;
+	objective: string;
+	status: "active" | "paused" | "budget-limited" | "complete" | "dropped";
+	tokenBudget?: number;
+	tokensUsed: number;
+	timeUsedSeconds: number;
+	reason?: "completed";
+}
+
+/**
  * A plan the agent has proposed for approval. The deck UI renders this as an
  * inline `PlanApproval` card. Replayed on `subscribed` so a page-reload during
  * pending approval re-shows the card without waiting for the next event.
@@ -1032,6 +1046,12 @@ export interface SessionSnapshot {
 	 * page reload re-renders the PlanApproval inline component.
 	 */
 	pendingPlanApproval?: PendingPlanApprovalWire;
+	/**
+	 * Goal-mode state, present iff the session has an active or paused goal.
+	 * Replayed on subscribe so a page-reload during goal mode re-renders the
+	 * goal pill and controls.
+	 */
+	goalMode?: GoalModeContextWire;
 	/**
 	 * Prompts the SDK currently has queued for execution after the active
 	 * turn finishes. Empty when no turn is in flight or no queued prompts
@@ -1151,6 +1171,18 @@ export type ClientFrame =
 			proposalId: string;
 			approved: boolean;
 			editedContent?: string;
+	  }
+	/**
+	 * Goal-mode action for `sessionId`. Create starts a new autonomous goal;
+	 * pause/resume/cancel control the lifecycle; set_budget adjusts the token
+	 * ceiling mid-flight. Server broadcasts a `goal_updated` frame on success.
+	 */
+	| {
+			type: "goal_action";
+			sessionId: string;
+			action: "create" | "pause" | "resume" | "cancel" | "set_budget";
+			objective?: string;
+			tokenBudget?: number;
 	  }
 	// ── Terminal frames ───────────────────────────────────────────────────
 	| { type: "terminal_open" }
@@ -1331,6 +1363,15 @@ export type ServerFrame =
 			sessionId: string;
 			proposalId: string;
 			outcome: "approved" | "rejected" | "resolved_elsewhere" | "expired";
+	  }
+	/**
+	 * Goal-mode state changed for `sessionId`. Broadcast on every create/pause/
+	 * resume/cancel/set_budget action. `goal` is null when goal mode exits.
+	 */
+	| {
+			type: "goal_updated";
+			sessionId: string;
+			goal: GoalModeContextWire | null;
 	  }
 	/**
 	 * Server liveness heartbeat. Broadcast on a fixed interval (default 5s).

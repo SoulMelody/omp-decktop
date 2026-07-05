@@ -6,7 +6,7 @@
  * raw SDK events.
  */
 
-import type { ContextUsage, ModelRef, PendingPlanApprovalWire, PlanModeContextWire } from "@omp-deck/protocol";
+import type { ContextUsage, GoalModeContextWire, ModelRef, PendingPlanApprovalWire, PlanModeContextWire } from "@omp-deck/protocol";
 
 // ─── Content blocks ────────────────────────────────────────────────────────
 
@@ -246,7 +246,7 @@ export interface SessionUi {
 	};
 
 	mode?: { mode: string; data?: unknown };
-	goal?: { goal: unknown; state?: unknown } | null;
+	goalMode?: GoalModeContextWire;
 
 	usage: UsageRollup;
 	turnCount: number;

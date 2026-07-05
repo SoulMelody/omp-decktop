@@ -361,3 +361,56 @@ describe("reducer subagent task events", () => {
 		expect(next).toBe(s);
 	});
 });
+
+describe("reducer goal_updated lifecycle", () => {
+	test("hydrates goal progress from goal_updated event", () => {
+		const active = applyEvent(fresh(), {
+			type: "goal_updated",
+			goal: {
+				enabled: true,
+				objective: "Ship safely",
+				status: "active",
+				tokenBudget: 100,
+				tokensUsed: 12,
+				timeUsedSeconds: 3,
+			},
+		} as never);
+
+		expect(active.goalMode).toMatchObject({ objective: "Ship safely", status: "active" });
+	});
+
+	test("clears goalMode when goal is null", () => {
+		const withGoal = applyEvent(fresh(), {
+			type: "goal_updated",
+			goal: {
+				enabled: true,
+				objective: "Ship safely",
+				status: "active",
+				tokenBudget: 100,
+				tokensUsed: 12,
+				timeUsedSeconds: 3,
+			},
+		} as never);
+
+		const cleared = applyEvent(withGoal, { type: "goal_updated", goal: null } as never);
+		expect(cleared.goalMode).toBeUndefined();
+	});
+
+	test("initSession seeds goalMode from snapshot", () => {
+		const s = initSession({
+			sessionId: "s1",
+			cwd: "/tmp/x",
+			isStreaming: true,
+			messages: [],
+			todoPhases: [],
+			goalMode: {
+				enabled: true,
+				objective: "Refactor core",
+				status: "paused",
+				tokensUsed: 42,
+				timeUsedSeconds: 10,
+			},
+		});
+		expect(s.goalMode).toMatchObject({ objective: "Refactor core", status: "paused" });
+	});
+});

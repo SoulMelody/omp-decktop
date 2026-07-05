@@ -9,6 +9,7 @@ import type {
 	AgentMessageJson,
 	AgentSessionEventJson,
 	ContextUsage,
+	GoalModeContextWire,
 	ImageAttachment,
 	ModelRef,
 	PendingPlanApprovalWire,
@@ -20,6 +21,7 @@ import type {
 import { logger } from "../log.ts";
 import type { DeckSlashResult } from "../deck-slash-commands.ts";
 import { resolveProviderName } from "../provider-names.ts";
+import { GoalModeBridge } from "./goal-mode-bridge.ts";
 import { PlanModeBridge } from "./plan-mode-bridge.ts";
 import type {
 	EventListener,
@@ -27,6 +29,7 @@ import type {
 	SessionHandle,
 	SlashDispatchResult,
 } from "./types.ts";
+import type { GoalAction } from "./goal-mode-bridge.ts";
 import { extractMessageText } from "./sdk-helpers.ts";
 
 const log = logger("bridge:in-process");
@@ -46,6 +49,7 @@ export class InProcessSessionHandle implements SessionHandle {
 	private readonly sessionManager: SessionManager;
 	private readonly modelRegistryRef: () => Promise<ModelRegistry>;
 	private readonly planBridge: PlanModeBridge;
+	private readonly goalBridge: GoalModeBridge;
 	private listeners = new Set<EventListener>();
 	private onDisposeCallback: () => void;
 	private disposed = false;
@@ -71,6 +75,7 @@ export class InProcessSessionHandle implements SessionHandle {
 		sessionId: string;
 		getModelRegistry: () => Promise<ModelRegistry>;
 		planBridge: PlanModeBridge;
+		goalBridge: GoalModeBridge;
 		onDispose: () => void;
 	}) {
 		this.session = args.session;
@@ -79,6 +84,10 @@ export class InProcessSessionHandle implements SessionHandle {
 		this.sessionId = args.sessionId;
 		this.modelRegistryRef = args.getModelRegistry;
 		this.planBridge = args.planBridge;
+		this.goalBridge = args.goalBridge;
+		this.goalBridge.subscribe((frame) => {
+			this.emit(frame);
+		});
 		this.onDisposeCallback = args.onDispose;
 	}
 
@@ -172,6 +181,8 @@ export class InProcessSessionHandle implements SessionHandle {
 		if (planMode) snap.planMode = planMode;
 		const pendingPlan = this.planBridge.getPendingPlanApproval();
 		if (pendingPlan) snap.pendingPlanApproval = pendingPlan;
+		const goalMode = this.goalBridge.getContext();
+		if (goalMode) snap.goalMode = goalMode;
 		if (this.shadowQueue.length > 0) snap.queuedPrompts = [...this.shadowQueue];
 		return snap;
 	}
@@ -636,9 +647,20 @@ export class InProcessSessionHandle implements SessionHandle {
 		return this.planBridge.respond(proposalId, response);
 	}
 
+	// ─── Goal-mode bridge surface ──────────────────────────────────────────────────
+
+	async actOnGoal(action: GoalAction): Promise<void> {
+		await this.goalBridge.act(action);
+	}
+
+	getGoalModeContext(): GoalModeContextWire | undefined {
+		return this.goalBridge.getContext();
+	}
+
 	async dispose(): Promise<void> {
 		if (this.disposed) return;
 		this.disposed = true;
+		this.goalBridge.dispose();
 		this.listeners.clear();
 		try {
 			await this.session.dispose();

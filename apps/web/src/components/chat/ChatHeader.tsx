@@ -26,8 +26,8 @@ function Inner({ session }: { session: SessionUi }) {
 	const createSession = useStore((s) => s.createSession);
 	const selectSession = useStore((s) => s.selectSession);
 	const defaultCwd = useStore((s) => s.defaultCwd);
+	const actOnGoal = useStore((s) => s.actOnGoal);
 	const sessionsById = useStore((s) => s.sessionsById);
-
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState(session.sessionName ?? "");
 	const [renameError, setRenameError] = useState<string | undefined>(undefined);
@@ -151,6 +151,41 @@ function Inner({ session }: { session: SessionUi }) {
 					title="Plan mode active — agent will read + propose a plan, then await approval before execution (Shift+Tab to exit)"
 				>
 					plan
+				</span>
+			) : null}
+
+			{session.goalMode ? (
+				<span
+					className="hidden h-6 shrink-0 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-1.5 font-mono text-2xs uppercase tracking-meta text-accent sm:flex"
+					title={`Goal ${session.goalMode.status}: ${session.goalMode.objective}`}
+				>
+					goal {session.goalMode.status}
+					{session.goalMode.status === "active" ? (
+						<button
+							type="button"
+							onClick={(e) => { e.stopPropagation(); actOnGoal("pause"); }}
+							className="ml-0.5 rounded px-1 hover:bg-accent/20 text-2xs normal-case"
+						>
+							pause
+						</button>
+					) : session.goalMode.status === "paused" ? (
+						<button
+							type="button"
+							onClick={(e) => { e.stopPropagation(); actOnGoal("resume"); }}
+							className="ml-0.5 rounded px-1 hover:bg-accent/20 text-2xs normal-case"
+						>
+							resume
+						</button>
+					) : null}
+					{session.goalMode.status !== "complete" && session.goalMode.status !== "dropped" ? (
+						<button
+							type="button"
+							onClick={(e) => { e.stopPropagation(); actOnGoal("cancel"); }}
+							className="ml-0.5 rounded px-1 hover:bg-danger/20 text-2xs normal-case text-danger"
+						>
+							cancel
+						</button>
+					) : null}
 				</span>
 			) : null}
 

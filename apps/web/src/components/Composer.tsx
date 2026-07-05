@@ -50,6 +50,7 @@ export function Composer() {
 	const abort = useStore((s) => s.abort);
 	const clearQueue = useStore((s) => s.clearQueue);
 	const setPlanMode = useStore((s) => s.setPlanMode);
+	const actOnGoal = useStore((s) => s.actOnGoal);
 	const planModeEnabled = session?.planMode?.enabled ?? false;
 	const pendingDraft = useStore((s) => s.pendingDraft);
 	const setPendingDraft = useStore((s) => s.setPendingDraft);
@@ -152,8 +153,16 @@ export function Composer() {
 					: "Enter plan mode — agent reads + proposes only (or Shift+Tab)",
 				argumentHint: "[on|off]",
 			},
+			{
+				name: "goal",
+				scope: "deck",
+				description: session?.goalMode
+					? `Goal ${session.goalMode.status}: pause, resume, or cancel`
+					: "Start an autonomous goal",
+				argumentHint: "<objective> | pause | resume | cancel",
+			},
 		],
-		[planModeEnabled],
+		[planModeEnabled, session?.goalMode],
 	);
 
 	const allSlashCommands = useMemo(
@@ -294,9 +303,20 @@ export function Composer() {
 				else setPlanMode(!planModeEnabled);
 				return true;
 			}
+			if (name === "goal") {
+				if (!session) return true;
+				const arg = args.trim();
+				const lower = arg.toLowerCase();
+				if (lower === "pause" || lower === "resume" || lower === "cancel") {
+					actOnGoal(lower);
+				} else if (arg) {
+					actOnGoal("create", { objective: arg });
+				}
+				return true;
+			}
 			return false;
 		},
-		[session, planModeEnabled, setPlanMode],
+		[session, planModeEnabled, setPlanMode, actOnGoal],
 	);
 
 	const pickSlashCommand = useCallback(

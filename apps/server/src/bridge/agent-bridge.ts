@@ -24,6 +24,7 @@ import { getDeckModelRegistry } from "../auth-singleton.ts";
 import { getEffectivePrelude } from "../orientation-store.ts";
 import { notificationService } from "../notifications/index.ts";
 import { ExtensionUIBridge } from "./ext-ui-bridge.ts";
+import { GoalModeBridge, type GoalModeSessionSurface } from "./goal-mode-bridge.ts";
 import { PlanModeBridge, type PlanModeSessionSurface } from "./plan-mode-bridge.ts";
 import type {
 	AgentBridge,
@@ -34,7 +35,6 @@ import type {
 	RuntimeEnvUpdate,
 	SessionHandle,
 } from "./types.ts";
-
 import { InProcessSessionHandle } from "./session-handle.ts";
 import {
 	type SdkModel,
@@ -413,6 +413,11 @@ export class InProcessAgentBridge implements AgentBridge {
 			getSessionId: () => sessionArtifacts.getSessionId(),
 		});
 
+		const goalBridge = new GoalModeBridge({
+			sessionId,
+			session: session as unknown as GoalModeSessionSurface,
+		});
+
 		const handle = new InProcessSessionHandle({
 			session,
 			sessionManager,
@@ -420,9 +425,11 @@ export class InProcessAgentBridge implements AgentBridge {
 			sessionId,
 			getModelRegistry: () => this.ensureModelRegistry(),
 			planBridge,
+			goalBridge,
 			onDispose: () => {
 				uiBridge.dispose();
 				planBridge.dispose();
+				goalBridge.dispose();
 				this.active.delete(sessionId);
 				this.pendingAutoPrompts.delete(sessionId);
 			},
@@ -466,10 +473,10 @@ export class InProcessAgentBridge implements AgentBridge {
 			// next reminder cycle. Synthesize `todo_phases_set` after each
 			// todo_write tool result so the Inspector TodoPanel reflects the
 			// current phase tree within the same tick (T-106).
-			if (type === "tool_execution_end") {
-				const toolName = (event as { toolName?: string }).toolName;
-				if (toolName === "todo_write") {
-					const phases = (session as unknown as { getTodoPhases?: () => unknown[] }).getTodoPhases?.();
+			if (type === "tool_execution_end" && event && typeof event === "object" && "toolName" in event) {
+				const toolName = event.toolName;
+				if (toolName === "todo" && "getTodoPhases" in session && typeof session.getTodoPhases === "function") {
+					const phases = session.getTodoPhases();
 					if (Array.isArray(phases)) {
 						handle.emit({ type: "todo_phases_set", todoPhases: phases } as unknown as AgentSessionEventJson);
 					}

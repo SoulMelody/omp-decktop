@@ -6,7 +6,7 @@
  * boundary stays narrow.
  */
 
-import type { AgentSessionEventJson, ContextUsage, SessionSnapshot } from "@omp-deck/protocol";
+import type { AgentSessionEventJson, ContextUsage, GoalModeContextWire, SessionSnapshot } from "@omp-deck/protocol";
 
 import type {
 	AssistantContentBlock,
@@ -54,8 +54,7 @@ export function initSession(snapshot: SessionSnapshot): SessionUi {
 		turnCount: 0,
 		contextUsage: snapshot.contextUsage,
 		queuedPrompts: hydrateQueuedPrompts(snapshot.queuedPrompts),
-		planMode: snapshot.planMode,
-		pendingPlanApproval: snapshot.pendingPlanApproval,
+		goalMode: snapshot.goalMode,
 	};
 	for (const m of snapshot.messages) {
 		ingestMessage(state, m);
@@ -189,10 +188,10 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 
 		// ─── Todos ─────────────────────────────────────────────────────────
 		case "todo_reminder": {
-			const todos = (event as any).todos as unknown;
+			const todos = (event as { todos?: unknown }).todos;
 			return { ...state, todoPhases: normalizeTodoPhases([todos]) };
 		}
-		// Synthetic event emitted by the deck bridge after every `todo_write`
+		// Synthetic event emitted by the deck bridge after every `todo`
 		// `tool_execution_end`. Carries the canonical `TodoPhase[]` from
 		// `session.getTodoPhases()` so the Inspector reflects in-turn changes
 		// without waiting for the next SDK reminder tick (T-106).
@@ -304,11 +303,10 @@ export function applyEvent(state: SessionUi, event: AgentSessionEventJson): Sess
 				...state,
 				thinkingLevel: (event as any).thinkingLevel as string | undefined,
 			};
-		case "goal_updated":
-			return {
-				...state,
-				goal: { goal: (event as any).goal, state: (event as any).state },
-			};
+		case "goal_updated": {
+			const goalPayload = event as unknown as { goal: GoalModeContextWire | null };
+			return { ...state, goalMode: goalPayload.goal ?? undefined };
+		}
 		case "irc_message": {
 			const msg = (event as any).message;
 			if (!msg) return state;

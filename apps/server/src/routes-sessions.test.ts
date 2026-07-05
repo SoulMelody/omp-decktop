@@ -101,6 +101,8 @@ class FakeSessionHandle implements SessionHandle {
 	getPlanModeContext(): undefined { return undefined; }
 	getPendingPlanApproval(): undefined { return undefined; }
 	async respondToPlanApproval(): Promise<"unknown"> { return "unknown"; }
+	async actOnGoal(): Promise<void> {}
+	getGoalModeContext(): undefined { return undefined; }
 	async dispose(): Promise<void> {}
 }
 

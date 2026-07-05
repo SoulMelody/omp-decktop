@@ -126,6 +126,10 @@ export class WsHub {
 				await this.handlePlanResponse(ws, frame);
 				return;
 
+			case "goal_action":
+				await this.handleGoalAction(ws, frame);
+				return;
+
 			case "terminal_open": {
 				const ok = terminalService.start();
 				if (ok) {
@@ -446,6 +450,35 @@ export class WsHub {
 				type: "error",
 				sessionId,
 				error: `plan_response failed: ${String((err as Error).message ?? err)}`,
+			});
+		}
+	}
+
+	private async handleGoalAction(
+		ws: ServerWebSocket<ConnectionData>,
+		frame: Extract<ClientFrame, { type: "goal_action" }>,
+	): Promise<void> {
+		const handle = this.bridge.getSession(frame.sessionId);
+		if (!handle) {
+			send(ws, { type: "error", sessionId: frame.sessionId, error: "session not active" });
+			return;
+		}
+		this.bridge.bumpActivity(frame.sessionId);
+		const { action, objective, tokenBudget } = frame;
+		try {
+			await handle.actOnGoal(
+				action === "create"
+					? { action: "create", objective: objective ?? "", tokenBudget }
+					: action === "set_budget"
+						? { action: "set_budget", tokenBudget }
+						: { action },
+			);
+		} catch (err) {
+			log.warn(`actOnGoal threw`, err);
+			send(ws, {
+				type: "error",
+				sessionId: frame.sessionId,
+				error: `goal_action failed: ${String((err as Error).message ?? err)}`,
 			});
 		}
 	}

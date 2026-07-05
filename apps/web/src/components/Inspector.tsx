@@ -30,7 +30,7 @@ export function Inspector() {
 				{session.thinkingLevel ? <KV k="think" v={session.thinkingLevel} /> : null}
 			</Section>
 
-			<ModeBanner mode={session.mode} goal={session.goal ?? undefined} />
+			<ModeBanner mode={session.mode} goalMode={session.goalMode} />
 			<CostStrip usage={session.usage} turns={session.turnCount} />
 			<TodoPanel phases={session.todoPhases} />
 		</div>
