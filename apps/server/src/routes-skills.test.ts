@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
 
-import type { InstallSkillFromUrlRequest, InstallSkillFromUrlResponse } from "@omp-deck/protocol";
+import type { InstallSkillFromNpmRequest, InstallSkillFromNpmResponse } from "@omp-deck/protocol";
 
 import type { Config } from "./config.ts";
 import { MarketplaceService } from "./marketplace-service.ts";
@@ -27,32 +27,29 @@ const TEST_CONFIG: Config = {
 };
 
 class InstallOnlySkillsService extends SkillsService {
-	constructor(private readonly install: (req: InstallSkillFromUrlRequest) => Promise<InstallSkillFromUrlResponse>) {
+	constructor(private readonly install: (req: InstallSkillFromNpmRequest) => Promise<InstallSkillFromNpmResponse>) {
 		super(TEST_CONFIG, new MarketplaceService());
 	}
 
-	override async installFromUrl(req: InstallSkillFromUrlRequest): Promise<InstallSkillFromUrlResponse> {
+	override async installFromNpm(req: InstallSkillFromNpmRequest): Promise<InstallSkillFromNpmResponse> {
 		return this.install(req);
 	}
 }
 
-describe("POST /skills/install", () => {
+describe("POST /skills/npm/add", () => {
 	test.each([
-		{ status: 409, message: "skill already exists" },
-		{ status: 413, message: "response too large" },
-		{ status: 415, message: "unsupported content-type" },
-		{ status: 502, message: "fetch failed: HTTP 503" },
-	])("propagates installFromUrl $status failures", async ({ status, message }) => {
+		{ status: 502, message: "bunx skills add failed: network error" },
+	])("propagates installFromNpm $status failures", async ({ status, message }) => {
 		const app = buildSkillsRouter(
 			new InstallOnlySkillsService(async () => {
 				throw installError(message, status);
 			}),
 		);
 
-		const res = await app.request("/skills/install", {
+		const res = await app.request("/skills/npm/add", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ url: "https://example.com/SKILL.md" }),
+			body: JSON.stringify({ source: { source: "owner/repo" } }),
 		});
 
 		expect(res.status).toBe(status);

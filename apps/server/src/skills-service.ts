@@ -93,7 +93,6 @@ const PROVIDER_PRIORITY: Readonly<Record<string, number>> = {
 	custom: 10,
 };
 
-const MAX_INSTALL_BYTES = 256 * 1024;
 const SKILL_MARKER = "SKILL.md";
 
 class UserFacingError extends Error {
@@ -301,34 +300,23 @@ export class SkillsService {
 	}
 
 	async installFromUrl(req: InstallSkillFromUrlRequest): Promise<InstallSkillFromUrlResponse> {
-		const scope = req.scope ?? "user";
-		if (scope !== "user" && scope !== "project") {
-			throw new UserFacingError("scope must be \"user\" or \"project\"", 400);
+		// Delegate to bunx skills add - it handles URLs, GitHub shorthand, git URLs, etc.
+		const npmResult = await this.installFromNpm({
+			source: { source: req.url.trim() },
+			scope: req.scope,
+			cwd: req.cwd,
+		});
+		// Map npm response to URL install response format
+		const firstSkill = npmResult.skills[0];
+		if (!firstSkill) {
+			throw new UserFacingError("no skill was installed", 500);
 		}
-
-		const root = this.resolveSkillRoot(scope, req.cwd);
-		const source = req.url.trim();
-		if (!source) throw new UserFacingError("url is required", 400);
-
-		const sourceUrl = resolveSkillSourceUrl(source);
-		const body = await fetchSkillMarkdown(sourceUrl);
-		validateSkillMarkdown(body);
-
-		const dirName = deriveInstalledSkillDirName(body, sourceUrl);
-		const skillDir = path.join(root, dirName);
-		const skillPath = path.join(skillDir, SKILL_MARKER);
-		try {
-			await stat(skillPath);
-			throw new UserFacingError(`skill "${dirName}" already exists`, 409);
-		} catch (err) {
-			if (err instanceof UserFacingError) throw err;
-			if (!isNotFoundError(err)) throw err;
-		}
-
-		await mkdir(skillDir, { recursive: true });
-		await writeFile(skillPath, body, "utf8");
-		log.info(`installed skill from URL at ${skillPath}`);
-		return { id: encodePathToId(skillPath), skillPath, dirName };
+		const skillPath = npmResult.paths[0] ?? path.join(this.resolveNpmSkillRoot(npmResult.scope, req.cwd), firstSkill);
+		return {
+			id: encodePathToId(skillPath),
+			skillPath,
+			dirName: firstSkill,
+		};
 	}
 
 	// ─── NPM-based skill management (via bunx skills CLI) ──────────────────────
@@ -517,166 +505,6 @@ export class SkillsService {
 	}
 }
 
-/**
- * Accept a GitHub blob URL, a GitHub raw URL, or any raw SKILL.md URL
- * and normalise it to the URL we'll actually fetch. We refuse anything that
- * isn't http(s) — file:, data:, git://, etc. are out.
- */
-function resolveSkillSourceUrl(source: string): URL {
-	let parsed: URL;
-	try {
-		parsed = new URL(source);
-	} catch {
-		throw new UserFacingError("url is not a valid URL", 400);
-	}
-	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-		throw new UserFacingError("url must use http or https", 400);
-	}
-	// GitHub: https://github.com/<owner>/<repo>/blob/<ref>/<path…>  →  raw.
-	// Strip query/fragment — github.com doesn't accept them on raw URLs and
-	// they often carry tokens we don't want logged.
-	if (parsed.hostname === "github.com" && parsed.pathname.includes("/blob/")) {
-		const parts = parsed.pathname.split("/").filter(Boolean);
-		const blobIdx = parts.indexOf("blob");
-		if (blobIdx > 0 && blobIdx + 1 < parts.length) {
-			const ref = parts[blobIdx + 1];
-			const filePath = parts.slice(blobIdx + 2).join("/");
-			if (filePath) {
-				return new URL(`https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/${ref}/${filePath}`);
-			}
-		}
-	}
-	if (parsed.hostname === "raw.githubusercontent.com" || parsed.hostname === "gist.githubusercontent.com") {
-		// Drop any ?token=… style query that might leak a credential.
-		parsed.search = "";
-		parsed.hash = "";
-	}
-	return parsed;
-}
-
-/**
- * Fetch the SKILL.md body, refusing anything that isn't text-like, anything
- * that would exceed MAX_INSTALL_BYTES, and anything that returns non-OK.
- */
-async function fetchSkillMarkdown(url: URL): Promise<string> {
-	const res = await fetch(url, { redirect: "follow" });
-	if (!res.ok) {
-		throw new UserFacingError(`fetch failed: HTTP ${res.status}`, 502);
-	}
-	const lenHeader = res.headers.get("content-length");
-	if (lenHeader) {
-		const declared = Number.parseInt(lenHeader, 10);
-		if (Number.isFinite(declared) && declared > MAX_INSTALL_BYTES) {
-			throw new UserFacingError(`response too large (${declared} bytes)`, 413);
-		}
-	}
-	const ctype = res.headers.get("content-type") ?? "";
-	if (
-		ctype &&
-		!ctype.toLowerCase().includes("text") &&
-		!ctype.toLowerCase().includes("markdown") &&
-		!ctype.toLowerCase().includes("octet-stream")
-	) {
-		throw new UserFacingError(`unsupported content-type: ${ctype}`, 415);
-	}
-	// Read with a hard byte cap so a hostile server streaming gigabytes
-	// can't OOM us before the content-length header is sent.
-	const reader = res.body?.getReader();
-	if (!reader) throw new UserFacingError("empty response body", 502);
-	const chunks: Uint8Array[] = [];
-	let total = 0;
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		if (!value) continue;
-		total += value.byteLength;
-		if (total > MAX_INSTALL_BYTES) {
-			try {
-				await reader.cancel();
-			} catch {
-				/* ignore */
-			}
-			throw new UserFacingError(`response too large (>${MAX_INSTALL_BYTES} bytes)`, 413);
-		}
-		chunks.push(value);
-	}
-	const merged = new Uint8Array(total);
-	let offset = 0;
-	for (const c of chunks) {
-		merged.set(c, offset);
-		offset += c.byteLength;
-	}
-	return new TextDecoder("utf-8", { fatal: false }).decode(merged);
-}
-
-/**
- * Require that the body at least looks like a SKILL.md file. We don't fully
- * parse frontmatter here — deriveInstalledSkillDirName does the cheap parse
- * for the name — but we reject the obviously-wrong cases (empty, binary, or
- * an HTML error page pretending to be a skill).
- */
-function validateSkillMarkdown(body: string): void {
-	if (!body || !body.trim()) throw new UserFacingError("response body is empty", 400);
-	if (body.length > MAX_INSTALL_BYTES) throw new UserFacingError("response body exceeds size limit", 413);
-	const head = body.slice(0, 512).toLowerCase();
-	if (head.includes("<!doctype html") || head.includes("<html")) {
-		throw new UserFacingError("response is HTML, not a SKILL.md", 400);
-	}
-}
-
-/**
- * Pull a safe directory name out of the body. Priority:
- *   1. The frontmatter `name:` field, if it parses and slugifies cleanly.
- *   2. The URL's last meaningful path segment.
- *   3. A timestamped fallback.
- * Always returns a relative, slug-only segment — no separators, no
- * traversal, no reserved names.
- */
-function deriveInstalledSkillDirName(body: string, sourceUrl: URL): string {
-	const frontName = parseFrontmatterName(body);
-	const fromFrontmatter = frontName ? slugify(frontName) : "";
-	const fromPath = slugify(decodeURIComponent(path.basename(sourceUrl.pathname, path.extname(sourceUrl.pathname))) || "skill");
-	let candidate = fromFrontmatter || fromPath;
-	if (!candidate || RESERVED_DIR_NAMES.has(candidate)) {
-		candidate = `skill-${Date.now().toString(36)}`;
-	}
-	// Belt and braces: never let a slug start with a dot, never let it
-	// contain a separator that `path.join` would interpret.
-	candidate = candidate.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/^[-.]+|[-.]+$/g, "");
-	if (!candidate) candidate = `skill-${Date.now().toString(36)}`;
-	return candidate.slice(0, 64);
-}
-
-function parseFrontmatterName(body: string): string | undefined {
-	if (!body.startsWith("---")) return undefined;
-	const end = body.indexOf("\n---", 3);
-	if (end < 0) return undefined;
-	const block = body.slice(3, end);
-	for (const line of block.split(/\r?\n/)) {
-		const m = /^name\s*:\s*(.+?)\s*$/.exec(line);
-		if (m) {
-			// Strip wrapping quotes if present.
-			const raw = (m[1] ?? "").replace(/^['"]|['"]$/g, "").trim();
-			return raw || undefined;
-		}
-	}
-	return undefined;
-}
-
-function slugify(s: string): string {
-	return s
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "")
-		.slice(0, 64);
-}
-
-const RESERVED_DIR_NAMES = new Set([".", ".."]);
-
-function isNotFoundError(err: unknown): boolean {
-	if (!err || typeof err !== "object" || !("code" in err)) return false;
-	return err.code === "ENOENT";
-}
 
 type PluginIndex = Map<string, { id: string; name: string; marketplace: string }>;
 

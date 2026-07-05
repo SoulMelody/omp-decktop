@@ -57,39 +57,17 @@ async function expectRejectsWithStatus(promise: Promise<unknown>, status: number
 	}
 }
 
-describe("SkillsService.installFromUrl", () => {
-	test("rejects non-http URLs before writing into the project skills root", async () => {
+
+describe("SkillsService.installFromNpm", () => {
+	test("handles bunx skills add failure gracefully", async () => {
 		const root = await boot();
 		const service = makeService(root);
 
+		// Invalid source that bunx skills add will reject
 		await expectRejectsWithStatus(
-			service.installFromUrl({ scope: "project", cwd: root, url: "file:///tmp/SKILL.md" }),
-			400,
-			/http or https/,
+			service.installFromNpm({ source: { source: "invalid-source-format" }, scope: "project", cwd: root }),
+			502,
+			/bunx skills add failed/,
 		);
-
-		const entries = await fs.readdir(path.join(root, ".omp", "skills")).catch(() => []);
-		expect(entries).toEqual([]);
-	});
-
-	test("refuses to overwrite an existing project skill directory", async () => {
-		const root = await boot();
-		const service = makeService(root);
-		const existingSkillPath = path.join(root, ".omp", "skills", "colliding-skill", "SKILL.md");
-		await fs.mkdir(path.dirname(existingSkillPath), { recursive: true });
-		await fs.writeFile(existingSkillPath, "original skill body", "utf8");
-		globalThis.fetch = (async () =>
-			new Response(textSkill("Colliding Skill"), {
-				status: 200,
-				headers: { "content-type": "text/markdown" },
-			})) as unknown as typeof fetch;
-
-		await expectRejectsWithStatus(
-			service.installFromUrl({ scope: "project", cwd: root, url: "https://example.com/SKILL.md" }),
-			409,
-			/already exists/,
-		);
-
-		expect(await fs.readFile(existingSkillPath, "utf8")).toBe("original skill body");
 	});
 });
