@@ -191,7 +191,13 @@ export interface SessionHandle {
 	actOnGoal(action: import("./goal-mode-bridge.ts").GoalAction): Promise<void>;
 	/** Read the bridge's goal-mode context for snapshot replay. */
 	getGoalModeContext(): GoalModeContextWire | undefined;
-	dispose(): Promise<void>;
+	/**
+	 * Tear down the in-memory session. By default the on-disk transcript is
+	 * KEPT so the session stays resumable from the sidebar — this is the
+	 * "close, I'm done for now" path. Pass `{ deleteFile: true }` to also drop
+	 * the transcript + artifacts from disk (permanent delete).
+	 */
+	dispose(opts?: { deleteFile?: boolean }): Promise<void>;
 }
 
 export type SlashDispatchResult =

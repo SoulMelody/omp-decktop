@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, shortPath, truncate, formatTokens, formatCost } from "@/lib/utils";
 import type { SessionUi } from "@/lib/types";
@@ -82,6 +82,14 @@ export function Sidebar() {
 		// prior permanent-delete can't silently carry over to the next session.
 		setPendingDelete(id);
 		setDeleteFile(false);
+	}
+
+	// Close a live session: dispose the in-process AgentSession but keep the
+	// on-disk transcript (resumable). Frees the server-side agent — and drops
+	// its main-agent ref from the process-global IRC registry — as soon as the
+	// user is done, without the delete confirm modal (nothing is destroyed).
+	function handleClose(id: string): void {
+		void disposeSession(id).then(() => refreshSessions(selectedCwd || undefined));
 	}
 
 	async function confirmDelete(): Promise<void> {
@@ -171,6 +179,7 @@ export function Sidebar() {
 							planMode={s.planMode?.enabled === true}
 							goalMode={s.goalMode}
 							onClick={() => selectSession(s.sessionId)}
+							onClose={() => handleClose(s.sessionId)}
 							onDelete={() => void handleDelete(s.sessionId)}
 						/>
 					);
@@ -304,6 +313,7 @@ function SessionRow({
 	planMode,
 	goalMode,
 	onClick,
+	onClose,
 	onDelete,
 }: {
 	title: string;
@@ -315,6 +325,7 @@ function SessionRow({
 	planMode?: boolean;
 	goalMode?: { status: string };
 	onClick: () => void;
+	onClose?: () => void;
 	onDelete?: () => void;
 }) {
 	const { t } = useTranslation();
@@ -379,6 +390,25 @@ function SessionRow({
 			{/* Meta (turns · tokens · cost / relative time) */}
 			{meta ? (
 				<div className="truncate pl-3 font-mono text-2xs text-ink-4">{meta}</div>
+			) : null}
+
+			{/* Close button — live sessions only; sits left of delete. Disposes the
+			    in-memory session but keeps the transcript (resumable), so it is a
+			    non-destructive "I'm done here" affordance distinct from delete. */}
+			{onClose ? (
+				<span
+					role="button"
+					tabIndex={0}
+					title={t("sidebar.closeSession")}
+					onClick={(e) => { e.stopPropagation(); onClose(); }}
+					onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onClose(); } }}
+					className={cn(
+						"absolute top-1.5 hidden h-5 w-5 items-center justify-center rounded text-ink-4 hover:bg-paper-3 hover:text-ink group-hover:flex",
+						onDelete ? "right-7" : "right-1",
+					)}
+				>
+					<X className="h-3 w-3" />
+				</span>
 			) : null}
 
 			{/* Delete button — visible on hover */}

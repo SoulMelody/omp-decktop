@@ -95,6 +95,7 @@ const zhCN = {
 		resumeFailed: "恢复失败：{{error}}",
 		live: "活跃",
 		deleteSession: "删除会话",
+		closeSession: "关闭会话（保留记录，可从侧栏恢复）",
 		planModeActive: "计划模式已启用",
 		planBadge: "计划",
 		goalBadge: "目标 {{status}}",

@@ -354,13 +354,19 @@ export function buildRouter(
 		}
 
 		try {
-			// Dispose the live handle if there is one. A purely persisted session
-			// (no handle) is a valid delete-file target, so a missing handle is
-			// only an error when we're not also deleting the file.
-			if (handle) await handle.dispose();
+			// Dispose the live handle if there is one, passing `deleteFile` through:
+			// with it set, the handle's own `dropSession` removes the transcript AND
+			// its artifacts dir; without it the transcript stays on disk so the
+			// session remains resumable (the "close" affordance). A purely persisted
+			// session (no handle) is a valid delete-file target, so a missing handle
+			// is only an error when we're not also deleting the file.
+			if (handle) await handle.dispose({ deleteFile });
 			else if (!deleteFile) return c.json({ error: "session not found" }, 404);
 
-			if (deleteFile) {
+			// Persisted-only delete (no live handle to drop the file for us): remove
+			// the transcript directly, guarded to an allowed root. The live-handle
+			// case already deleted the file above via `dropSession`.
+			if (deleteFile && !handle) {
 				await deleteSessionFile(filePath, [config.defaultCwd, ...config.extraWorkspaces]);
 			}
 			return c.json({ ok: true });

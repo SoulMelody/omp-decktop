@@ -657,7 +657,7 @@ export class InProcessSessionHandle implements SessionHandle {
 		return this.goalBridge.getContext();
 	}
 
-	async dispose(): Promise<void> {
+	async dispose(opts?: { deleteFile?: boolean }): Promise<void> {
 		if (this.disposed) return;
 		this.disposed = true;
 		this.goalBridge.dispose();
@@ -667,13 +667,19 @@ export class InProcessSessionHandle implements SessionHandle {
 		} catch (err) {
 			log.warn(`session.dispose threw`, err);
 		}
-		// Drop the session file from disk so it doesn't reappear after refresh.
-		const file = this.sessionFile;
-		if (file) {
-			try {
-				await this.sessionManager.dropSession(file);
-			} catch (err) {
-				log.warn(`dropSession threw`, err);
+		// Only remove the on-disk transcript + artifacts when the caller explicitly
+		// asks (permanent delete). The default is a plain "close": release the
+		// in-memory session but leave the file so it can be resumed from the
+		// sidebar. `dropSession` is destructive (deleteSessionWithArtifacts), so
+		// gating it here is what makes close vs delete distinct.
+		if (opts?.deleteFile) {
+			const file = this.sessionFile;
+			if (file) {
+				try {
+					await this.sessionManager.dropSession(file);
+				} catch (err) {
+					log.warn(`dropSession threw`, err);
+				}
 			}
 		}
 		this.onDisposeCallback();

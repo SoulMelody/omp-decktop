@@ -107,6 +107,7 @@ const en = {
 		messageCount: "{{count}} msgs",
 		resumeFailed: "Failed to resume: {{error}}",
 		live: "live",
+		closeSession: "Close session (keeps transcript)",
 		deleteSession: "Delete session",
 		planModeActive: "Plan mode active",
 		planBadge: "plan",
