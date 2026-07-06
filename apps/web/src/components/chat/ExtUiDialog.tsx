@@ -6,9 +6,8 @@
  * frames for the active session only. Submits answers as
  * `ext_ui_dialog_response`. Esc cancels.
  *
- * Multi-question `ask` flows arrive as a sequence of single-select dialogs —
- * the SDK awaits each one before sending the next, so a single-modal-per-
- * session UX is sufficient for v1.
+ * Supports both legacy single-select responses (`value`) and native multi-select
+ * responses (`values`) when the protocol frame sets `multi: true`.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ServerFrame } from "@omp-deck/protocol";
@@ -69,7 +68,7 @@ function DialogBody({ sessionId, dialog, onRespond }: BodyProps): JSX.Element {
 				{dialog.kind === "select" ? (
 					<SelectBody
 						dialog={dialog}
-						onSubmit={(value) => onRespond(sessionId, dialog.dialogId, { value })}
+						onSubmit={(resp) => onRespond(sessionId, dialog.dialogId, resp)}
 						onCancel={cancel}
 					/>
 				) : null}
@@ -105,7 +104,7 @@ function DialogBody({ sessionId, dialog, onRespond }: BodyProps): JSX.Element {
 
 interface SelectBodyProps {
 	dialog: OpenFrame;
-	onSubmit: (value: string) => void;
+	onSubmit: (response: { value?: string; values?: string[] }) => void;
 	onCancel: () => void;
 }
 
@@ -123,6 +122,38 @@ function asOption(item: string | { label: string; description?: string }): {
 	return item;
 }
 
+
+export interface SelectDialogSubmitState {
+	isMulti: boolean;
+	singleSelection?: string;
+	selectedValues: string[];
+	customSelected: boolean;
+	customValue: string;
+}
+
+export function getSelectDialogSubmitState({
+	isMulti,
+	singleSelection,
+	selectedValues,
+	customSelected,
+	customValue,
+}: SelectDialogSubmitState): { disabled: boolean; response?: { value?: string; values?: string[] } } {
+	const custom = customValue.trim();
+
+	if (isMulti) {
+		if (customSelected && !custom) return { disabled: true };
+		const values = customSelected ? [...selectedValues, custom] : selectedValues;
+		return values.length === 0 ? { disabled: true } : { disabled: false, response: { values } };
+	}
+
+	if (customSelected) {
+		return custom ? { disabled: false, response: { value: custom } } : { disabled: true };
+	}
+
+	return singleSelection === undefined
+		? { disabled: true }
+		: { disabled: false, response: { value: singleSelection } };
+}
 /**
  * Radio list with optional "(Recommended)" marker, optional per-option
  * description (when the SDK surfaces it), and free-form "Other (type your
@@ -132,32 +163,72 @@ function asOption(item: string | { label: string; description?: string }): {
 function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Element {
 	const rawOptions = dialog.options ?? [];
 	const options = useMemo(() => rawOptions.map(asOption), [rawOptions]);
-	const initial = useMemo(() => {
+	const isMulti = dialog.multi === true;
+
+	// Single-select state (radio mode)
+	const initialSingle = useMemo(() => {
 		if (typeof dialog.initialIndex === "number") return options[dialog.initialIndex]?.label;
 		if (typeof dialog.recommended === "number") return options[dialog.recommended]?.label;
 		return options[0]?.label;
 	}, [dialog.initialIndex, dialog.recommended, options]);
+	const [singleSelection, setSingleSelection] = useState<string | undefined>(initialSingle);
 
-	const [selection, setSelection] = useState<string | undefined>(initial);
+	// Multi-select state (checkbox mode)
+	const initialMulti = useMemo(() => {
+		const set = new Set<string>();
+		if (typeof dialog.initialIndex === "number") {
+			const label = options[dialog.initialIndex]?.label;
+			if (label) set.add(label);
+		}
+		if (typeof dialog.recommended === "number") {
+			const label = options[dialog.recommended]?.label;
+			if (label) set.add(label);
+		}
+		return set;
+	}, [dialog.initialIndex, dialog.recommended, options]);
+	const [multiSelection, setMultiSelection] = useState<Set<string>>(initialMulti);
+
+	// Custom "Other" value
 	const [customValue, setCustomValue] = useState("");
 	const customRef = useRef<HTMLInputElement>(null);
-	const isCustom = selection === OTHER_OPTION_SENTINEL;
+	const isCustom = isMulti
+		? multiSelection.has(OTHER_OPTION_SENTINEL)
+		: singleSelection === OTHER_OPTION_SENTINEL;
+	const selectedValues = useMemo(
+		() => Array.from(multiSelection).filter((label) => label !== OTHER_OPTION_SENTINEL),
+		[multiSelection],
+	);
+	const submitState = getSelectDialogSubmitState({
+		isMulti,
+		singleSelection,
+		selectedValues,
+		customSelected: isCustom,
+		customValue,
+	});
 
 	// Auto-focus the custom input when the user selects "Other".
 	useEffect(() => {
 		if (isCustom) customRef.current?.focus();
 	}, [isCustom]);
 
-	function submit(): void {
-		if (isCustom) {
-			const v = customValue.trim();
-			if (!v) return;
-			onSubmit(v);
-			return;
-		}
-		if (selection === undefined) return;
-		onSubmit(selection);
+	function toggleMultiOption(label: string): void {
+		setMultiSelection((prev) => {
+			const next = new Set(prev);
+			if (next.has(label)) {
+				next.delete(label);
+			} else {
+				next.add(label);
+			}
+			return next;
+		});
 	}
+
+	function submit(): void {
+		if (!submitState.response) return;
+		onSubmit(submitState.response);
+	}
+
+	const isSubmitDisabled = submitState.disabled;
 
 	return (
 		<form
@@ -170,17 +241,24 @@ function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Elemen
 			<div className="flex flex-col gap-1.5">
 				{options.map((opt, idx) => {
 					const isRecommended = idx === dialog.recommended;
+					const isChecked = isMulti
+						? multiSelection.has(opt.label)
+						: singleSelection === opt.label;
+					const onChange = isMulti
+						? () => toggleMultiOption(opt.label)
+						: () => setSingleSelection(opt.label);
+
 					return (
 						<label
 							key={opt.label}
 							className="flex cursor-pointer items-start gap-2 rounded border border-line/60 px-2.5 py-1.5 text-sm text-ink hover:border-line"
 						>
 							<input
-								type="radio"
+								type={isMulti ? "checkbox" : "radio"}
 								name="ext-ui-select"
 								value={opt.label}
-								checked={selection === opt.label}
-								onChange={() => setSelection(opt.label)}
+								checked={isChecked}
+								onChange={onChange}
 								className="mt-1"
 							/>
 							<span className="flex-1">
@@ -201,11 +279,17 @@ function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Elemen
 				})}
 				<label className="flex cursor-pointer items-center gap-2 rounded border border-line/60 px-2.5 py-1.5 text-sm text-ink hover:border-line">
 					<input
-						type="radio"
+						type={isMulti ? "checkbox" : "radio"}
 						name="ext-ui-select"
 						value={OTHER_OPTION_SENTINEL}
 						checked={isCustom}
-						onChange={() => setSelection(OTHER_OPTION_SENTINEL)}
+						onChange={() => {
+							if (isMulti) {
+								toggleMultiOption(OTHER_OPTION_SENTINEL);
+							} else {
+								setSingleSelection(OTHER_OPTION_SENTINEL);
+							}
+						}}
 					/>
 					<span className="text-ink-3">Other (type your own)</span>
 				</label>
@@ -222,7 +306,7 @@ function SelectBody({ dialog, onSubmit, onCancel }: SelectBodyProps): JSX.Elemen
 			</div>
 			<DialogFooter
 				submitLabel="Send"
-				disabled={isCustom ? !customValue.trim() : selection === undefined}
+				disabled={isSubmitDisabled}
 				onCancel={onCancel}
 			/>
 		</form>

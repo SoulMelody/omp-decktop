@@ -51,6 +51,16 @@ interface SessionManagerArtifactAccess {
 
 const log = logger("bridge:in-process");
 
+/**
+ * Derive a process-unique IRC/registry id for a deck session's main agent from
+ * its minted session id. Prefixed so it is visually distinct from the SDK's
+ * default `"Main"` and from subagent ids (which the task tool allocates as
+ * task-name slugs). See the call sites in {@link AgentBridge.createSession} for
+ * why the default `"Main"` cannot be shared across concurrent deck sessions.
+ */
+function mainAgentIdFor(sessionId: string): string {
+	return `deck:${sessionId}`;
+}
 
 /**
  * System-prompt block prepended to every omp session created or resumed via
@@ -114,6 +124,20 @@ export class InProcessAgentBridge implements AgentBridge {
 			// flashes a python.exe console window each turn-zero; on demand spawn is fine.
 			skipPythonPreflight: true,
 			systemPrompt: (defaults) => [getEffectivePrelude(), ...defaults],
+			// Give each deck session's main agent a UNIQUE id in the process-global
+			// AgentRegistry / IrcBus, instead of the SDK default of "Main". The deck
+			// runs many concurrent sessions in one process (one per workspace tab);
+			// all sharing the id "Main" makes them collide in the flat IRC namespace —
+			// registry refs overwrite each other and IRC delivery/`history://Main`
+			// route to whichever session registered last, so a subagent's IRC message
+			// in one workspace surfaces in another. A per-session id keeps each
+			// session's agent tree addressable on its own. NOTE: the registry/bus are
+			// still process-global and cannot be injected per-session without patching
+			// the SDK, so `irc list` / broadcast(`to:"all"`) can still SEE peers from
+			// other live sessions — that residual cross-session visibility is a known
+			// limitation (see docs). This only stops the id COLLISION that caused
+			// mis-delivery.
+			agentId: mainAgentIdFor(sessionManager.getSessionId()),
 			// Tell the SDK this session has a UI — gates the `ask` tool registration
 			// and any extension that calls `ctx.ui.*`. The actual ExtensionUIContext
 			// is installed via `setToolUIContext(...)` below.
@@ -157,6 +181,8 @@ export class InProcessAgentBridge implements AgentBridge {
 			authStorage: modelRegistry.authStorage,
 			skipPythonPreflight: true,
 			systemPrompt: (defaults) => [getEffectivePrelude(), ...defaults],
+			// Unique per-session main-agent id — see the rationale in createSession.
+			agentId: mainAgentIdFor(sessionManager.getSessionId()),
 			hasUI: true,
 		});
 		const session = result.session;

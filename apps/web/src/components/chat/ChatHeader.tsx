@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import type { SessionUi } from "@/lib/types";
 import { selectActiveSession, useStore } from "@/lib/store";
 import { cn, shortPath } from "@/lib/utils";
@@ -26,6 +26,7 @@ function Inner({ session }: { session: SessionUi }) {
 	const renameSession = useStore((s) => s.renameSession);
 	const createSession = useStore((s) => s.createSession);
 	const selectSession = useStore((s) => s.selectSession);
+	const disposeSession = useStore((s) => s.disposeSession);
 	const defaultCwd = useStore((s) => s.defaultCwd);
 	const actOnGoal = useStore((s) => s.actOnGoal);
 	const sessionsById = useStore((s) => s.sessionsById);
@@ -35,6 +36,7 @@ function Inner({ session }: { session: SessionUi }) {
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [modelOpen, setModelOpen] = useState(false);
 	const [launchOpen, setLaunchOpen] = useState(false);
+	const [closing, setClosing] = useState(false);
 	const switcherRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -79,6 +81,28 @@ function Inner({ session }: { session: SessionUi }) {
 	async function launchSession(opts: SessionLaunchOpts): Promise<void> {
 		await createSession({ cwd: opts.cwd, model: opts.model, planMode: opts.planMode });
 		setLaunchOpen(false);
+	}
+
+	// Close (dispose) the active session once the user is done with it. Frees the
+	// in-process AgentSession server-side — which also drops its main-agent ref
+	// from the process-global IRC registry, shrinking the cross-session peer set
+	// (see mainAgentIdFor rationale in agent-bridge). The on-disk transcript is
+	// kept (deleteFile omitted) so the session stays resumable from the sidebar;
+	// use the sidebar's delete flow to remove the file too.
+	async function closeSession(): Promise<void> {
+		if (closing) return;
+		if (session.status !== "idle") {
+			const ok = window.confirm(
+				"This session is still working. Close it anyway? The current turn will be stopped.",
+			);
+			if (!ok) return;
+		}
+		setClosing(true);
+		try {
+			await disposeSession(session.sessionId);
+		} finally {
+			setClosing(false);
+		}
 	}
 
 	const otherSessions = Object.values(sessionsById).filter((s) => s.sessionId !== session.sessionId);
@@ -280,6 +304,22 @@ function Inner({ session }: { session: SessionUi }) {
 					</div>
 				) : null}
 			</div>
+
+			{/* Close (dispose) this session. Frees the in-process agent + its
+			    IRC/registry entry as soon as the user is done — fewer concurrent
+			    sessions means fewer chances for the process-global IRC namespace
+			    to surface cross-session traffic. The on-disk transcript is kept,
+			    so the session stays resumable from the sidebar. */}
+			<button
+				type="button"
+				onClick={closeSession}
+				disabled={closing}
+				title="Close session (keeps transcript — resumable from sidebar)"
+				aria-label="Close session"
+				className="btn-ghost h-7 w-7 shrink-0 items-center justify-center p-0 text-ink-3 hover:text-danger disabled:opacity-50"
+			>
+				<X className="h-3.5 w-3.5" />
+			</button>
 
 			<SessionLaunchModal
 				open={launchOpen}
