@@ -264,7 +264,7 @@ export function ModelRolesSection() {
 	);
 }
 
-const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 

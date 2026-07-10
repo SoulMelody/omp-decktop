@@ -20,6 +20,7 @@
  *   - `@oh-my-pi/pi-coding-agent/src/modes/acp/acp-agent.ts` (ACP bridge)
  */
 import type {
+	AutocompleteProviderFactory,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 	ExtensionUiComponentFactory,
@@ -199,6 +200,11 @@ export class ExtensionUIBridge implements ExtensionUIContext {
 
 	notify(message: string, type?: "info" | "warning" | "error"): void {
 		log.info(`ui.notify [${type ?? "info"}]: ${message}`);
+	}
+
+	addAutocompleteProvider(_factory: AutocompleteProviderFactory): void {
+		// Deck mode has no TUI editor — accept and ignore autocomplete factories
+		// (matches the SDK's RPC/ACP/headless contract).
 	}
 
 	onTerminalInput(_handler: TerminalInputHandler): () => void {

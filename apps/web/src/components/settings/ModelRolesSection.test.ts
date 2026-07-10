@@ -23,7 +23,7 @@ describe("model role value helpers", () => {
 	});
 
 	test("accepts every supported thinking suffix", () => {
-		for (const level of ["minimal", "low", "medium", "high", "xhigh"]) {
+		for (const level of ["minimal", "low", "medium", "high", "xhigh", "max"]) {
 			expect(parseModelRoleValue(`anthropic/claude-sonnet-4:${level}`)).toEqual({
 				modelId: "anthropic/claude-sonnet-4",
 				thinkingLevel: level,
