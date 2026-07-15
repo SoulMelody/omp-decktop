@@ -8,16 +8,16 @@
  *      - snapshot active tools, splice in `resolve` if missing
  *      - `setActiveToolsByName(planTools)`
  *      - `setPlanModeState({ enabled, planFilePath, workflow })`
- *      - `setStandingResolveHandler(#handlePlanResolve)`
+ *      - `setPlanProposalHandler(#handlePlanProposal)`
  *      - broadcast `plan_mode_changed{enabled:true}`
  *
  *   2. Agent works under plan-mode restrictions (SDK's
  *      `#enforcePlanModeToolDecision` blocks writes via the system
- *      prompt + tool-decision intercept), writes `local://PLAN.md`,
- *      calls `resolve apply`. The SDK invokes our standing handler
- *      via `runResolveInvocation`.
+ *      prompt + tool-decision intercept), writes `local://<slug>-plan.md`,
+ *      then writes the slug to `xd://propose`. The SDK dispatches the
+ *      written title to our installed `PlanProposalHandler`.
  *
- *   3. `#handlePlanResolve`'s `apply` callback:
+ *   3. `#handlePlanProposal(title)`:
  *      - validates plan-mode is still active
  *      - locates + reads the plan file via the SDK's `resolveApprovedPlan`
  *        (also resolves the title, handling issue #1179 empty-`extra.title`)
@@ -29,17 +29,17 @@
  *      plan path, exit plan mode (restoring the previous tool set + clearing
  *      handler + clearing SDK state), and queue the SDK's
  *      `planModeApprovedPrompt` as a follow-up so the next turn executes the
- *      plan with full tools. The plan file is never renamed (SDK 16).
+ *      plan with full tools. The plan file is never renamed (SDK 17).
  *
  *   5. On reject: exit plan mode and surface a clear rejection
  *      message to the agent.
  *
  *   6. On cancel (user toggles plan mode off mid-approval) or session
- *      dispose: reject the pending promise so the resolve tool
+ *      dispose: reject the pending promise so the `xd://propose` write
  *      returns with an error the agent can recover from.
  *
  * SDK reference impl: `@oh-my-pi/pi-coding-agent/src/modes/interactive-mode.ts`
- * (`#enterPlanMode`, `#runPlanApprovalResolve`, `#exitPlanMode`,
+ * (`#enterPlanMode`, `#handlePlanProposal`, `#exitPlanMode`,
  * `#approvePlan`).
  */
 import * as fs from "node:fs/promises";
@@ -48,7 +48,7 @@ import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { AgentToolResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
 import { type PlanApprovalDetails, resolveApprovedPlan } from "@oh-my-pi/pi-coding-agent/plan-mode/approved-plan";
-import { type ResolveToolDetails, runResolveInvocation } from "@oh-my-pi/pi-coding-agent/tools/resolve";
+import type { PlanProposalHandler } from "@oh-my-pi/pi-coding-agent/tools/resolve";
 import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
 import type {
 	PendingPlanApprovalWire,
@@ -84,7 +84,7 @@ const PLAN_WORKFLOW = "parallel" as const;
  *   - `tools` includes `todo_write` (deck's session tool set always has it)
  *
  * Mirrors the upstream `{{planFilePath}}`/`{{planContent}}`/`{{contextPreserved}}`
- * variables. SDK 16 never renames the plan file, so `planFilePath` is the same
+ * variables. SDK 17 never renames the plan file, so `planFilePath` is the same
  * `local://PLAN.md` the agent wrote — no `finalPlanFilePath`.
  *
  * Inlined because the SDK's `exports` map doesn't expose `.md` assets, and
@@ -143,9 +143,7 @@ export interface PlanModeSessionSurface {
 	getActiveToolNames(): string[];
 	setActiveToolsByName(toolNames: string[]): Promise<void>;
 	setPlanModeState(state: { enabled: boolean; planFilePath: string; workflow: "parallel" | "iterative" } | undefined): void;
-	setStandingResolveHandler(
-		handler: ((input: unknown) => Promise<unknown> | unknown) | null,
-	): void;
+	setPlanProposalHandler(handler: PlanProposalHandler | null): void;
 	markPlanReferenceSent(): void;
 	readonly isStreaming: boolean;
 	prompt(
@@ -264,7 +262,7 @@ export class PlanModeBridge {
 			planFilePath: this.planFilePath,
 			workflow: PLAN_WORKFLOW,
 		});
-		this.session.setStandingResolveHandler((input) => this.#handlePlanResolve(input));
+		this.session.setPlanProposalHandler((title) => this.#handlePlanProposal(title));
 
 		this.#broadcast({
 			type: "plan_mode_changed",
@@ -316,7 +314,7 @@ export class PlanModeBridge {
 					log.warn(`tool restore failed during exit for ${this.sessionId}`, err);
 				}
 			}
-			this.session.setStandingResolveHandler(null);
+			this.session.setPlanProposalHandler(null);
 			this.session.setPlanModeState(undefined);
 			this.enabled = false;
 			this.previousTools = [];
@@ -370,137 +368,133 @@ export class PlanModeBridge {
 	}
 
 	/**
-	 * Standing resolve handler. The SDK calls this when the agent submits
-	 * `resolve { action: "apply" | "discard", ... }` while plan-mode is
-	 * active. We use the SDK's own `runResolveInvocation` to validate the
-	 * envelope (handles `action="discard"` and grammar-constrained input
-	 * shapes) and shape the result as `AgentToolResult<ResolveToolDetails>`.
+	 * Plan-proposal handler installed via `setPlanProposalHandler`. The SDK
+	 * calls this when the agent writes a plan slug to `xd://propose` while
+	 * plan-mode is active. The slug is the title the agent chose (mapped to
+	 * `local://<slug>-plan.md`); we feed it to `resolveApprovedPlan` as
+	 * `suppliedTitle` so the SDK can locate the plan file the agent wrote
+	 * (trying `<slug>-plan.md` first, then the plan-mode state path).
 	 *
-	 * The `apply` callback blocks on the user's `plan_response` reply.
-	 * Returning from it ends the agent's resolve tool with the supplied
-	 * content + details; the deferred `session.prompt(..., followUp)` then
-	 * starts a fresh turn that executes the approved plan.
+	 * The handler blocks on the user's `plan_response` reply. Returning
+	 * from it ends the agent's `xd://propose` write with the supplied
+	 * content + `PlanApprovalDetails`; the deferred
+	 * `session.prompt(..., followUp)` then starts a fresh turn that
+	 * executes the approved plan.
 	 */
-	#handlePlanResolve(input: unknown): Promise<AgentToolResult<ResolveToolDetails>> {
-		return runResolveInvocation(input as Parameters<typeof runResolveInvocation>[0], {
-			sourceToolName: "plan_approval",
-			label: "Plan ready for approval",
-			apply: async (_reason, extra) => {
-				if (!this.enabled) {
-					throw new ToolError("Plan mode is not active.");
-				}
+	async #handlePlanProposal(title: string): Promise<AgentToolResult<unknown>> {
+		if (!this.enabled) {
+			throw new ToolError("Plan mode is not active.");
+		}
 
-				// Locate + read the plan file the agent wrote and derive its title
-				// via the SDK's own resolver (handles the issue #1179 empty-`extra.title`
-				// corner case + slug fallbacks). SDK 16 never renames the plan file.
-				const resolved = await resolveApprovedPlan({
-					suppliedTitle: extra?.title,
-					statePlanFilePath: this.planFilePath,
-					readPlan: (url) => this.#readPlanFile(url),
-				});
-				const { planFilePath: resolvedPath, planContent, title } = resolved;
-				const proposalId = this.#allocateProposalId();
-
-				// Block on user approval. Stash the proposal so reconnects can
-				// replay it and a parallel `set_plan_mode(false)` can reject it.
-				const userResponse = await new Promise<PlanApprovalResponse>((resolve, reject) => {
-					this.pendingApproval = {
-						proposalId,
-						planFilePath: resolvedPath,
-						planContent,
-						suggestedTitle: title,
-						resolve,
-						reject,
-					};
-					this.#broadcast({
-						type: "plan_proposed",
-						sessionId: this.sessionId,
-						proposalId,
-						planFilePath: resolvedPath,
-						planContent,
-						suggestedTitle: title,
-					});
-				});
-
-				// Clear pending — anything after this point is post-decision.
-				this.pendingApproval = undefined;
-
-				if (!userResponse.approved) {
-					this.#broadcast({
-						type: "plan_proposal_resolved",
-						sessionId: this.sessionId,
-						proposalId,
-						outcome: "rejected",
-					});
-					await this.exit("rejected");
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: "User rejected the plan. Plan mode disabled; do not auto-execute.",
-							},
-						],
-						details: {
-							planFilePath: resolvedPath,
-							title,
-							planExists: true,
-						} satisfies PlanApprovalDetails,
-					};
-				}
-
-				// Approve path: optionally write edited content back to the (unchanged)
-				// plan path, exit plan mode, and queue the synthetic approved-prompt as
-				// a follow-up so the next turn executes the plan with full tools.
-				let finalContent = planContent;
-				if (typeof userResponse.editedContent === "string") {
-					await this.#writePlanFile(resolvedPath, userResponse.editedContent);
-					finalContent = userResponse.editedContent;
-				}
-
-				this.#broadcast({
-					type: "plan_proposal_resolved",
-					sessionId: this.sessionId,
-					proposalId,
-					outcome: "approved",
-				});
-
-				await this.exit("approved");
-
-				this.session.markPlanReferenceSent();
-				const approvedPrompt = renderApprovedPrompt({
-					planContent: finalContent,
-					planFilePath: resolvedPath,
-				});
-
-				// Fire-and-forget: the resolve tool is still streaming at
-				// this point (we haven't returned yet), so the SDK queues
-				// the prompt as followUp and fires it once the current
-				// turn ends. The `synthetic` flag is intentionally absent
-				// — the SDK's queue path doesn't preserve it; we accept
-				// the resulting user-role bubble so the user sees a
-				// visible "execute" handoff. v1.1 may swap to a deferred
-				// turn_end listener if the synthetic distinction matters.
-				void this.session
-					.prompt(approvedPrompt, { streamingBehavior: "followUp" })
-					.catch((err) => {
-						log.warn(`synthetic approved-plan prompt failed for ${this.sessionId}`, err);
-					});
-
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Plan approved. Executing from ${resolvedPath}.`,
-						},
-					],
-					details: {
-						planFilePath: resolvedPath,
-						title,
-						planExists: true,
-					} satisfies PlanApprovalDetails,
-				};
-			},
+		// Locate + read the plan file the agent wrote and derive its title
+		// via the SDK's own resolver (handles the issue #1179 empty-`extra.title`
+		// corner case + slug fallbacks). SDK 17 never renames the plan file.
+		const resolved = await resolveApprovedPlan({
+			suppliedTitle: title,
+			statePlanFilePath: this.planFilePath,
+			readPlan: (url) => this.#readPlanFile(url),
 		});
+		const { planFilePath: resolvedPath, planContent, title: resolvedTitle } = resolved;
+		const proposalId = this.#allocateProposalId();
+
+		// Block on user approval. Stash the proposal so reconnects can
+		// replay it and a parallel `set_plan_mode(false)` can reject it.
+		const userResponse = await new Promise<PlanApprovalResponse>((resolve, reject) => {
+			this.pendingApproval = {
+				proposalId,
+				planFilePath: resolvedPath,
+				planContent,
+				suggestedTitle: resolvedTitle,
+				resolve,
+				reject,
+			};
+			this.#broadcast({
+				type: "plan_proposed",
+				sessionId: this.sessionId,
+				proposalId,
+				planFilePath: resolvedPath,
+				planContent,
+				suggestedTitle: resolvedTitle,
+			});
+		});
+
+		// Clear pending — anything after this point is post-decision.
+		this.pendingApproval = undefined;
+
+		if (!userResponse.approved) {
+			this.#broadcast({
+				type: "plan_proposal_resolved",
+				sessionId: this.sessionId,
+				proposalId,
+				outcome: "rejected",
+			});
+			await this.exit("rejected");
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: "User rejected the plan. Plan mode disabled; do not auto-execute.",
+					},
+				],
+				details: {
+					planFilePath: resolvedPath,
+					title: resolvedTitle,
+					planExists: true,
+				} satisfies PlanApprovalDetails,
+			};
+		}
+
+		// Approve path: optionally write edited content back to the (unchanged)
+		// plan path, exit plan mode, and queue the synthetic approved-prompt as
+		// a follow-up so the next turn executes the plan with full tools.
+		let finalContent = planContent;
+		if (typeof userResponse.editedContent === "string") {
+			await this.#writePlanFile(resolvedPath, userResponse.editedContent);
+			finalContent = userResponse.editedContent;
+		}
+
+		this.#broadcast({
+			type: "plan_proposal_resolved",
+			sessionId: this.sessionId,
+			proposalId,
+			outcome: "approved",
+		});
+
+		await this.exit("approved");
+
+		this.session.markPlanReferenceSent();
+		const approvedPrompt = renderApprovedPrompt({
+			planContent: finalContent,
+			planFilePath: resolvedPath,
+		});
+
+		// Fire-and-forget: the `xd://propose` write is still streaming at
+		// this point (we haven't returned yet), so the SDK queues
+		// the prompt as followUp and fires it once the current
+		// turn ends. The `synthetic` flag is intentionally absent
+		// — the SDK's queue path doesn't preserve it; we accept
+		// the resulting user-role bubble so the user sees a
+		// visible "execute" handoff. v1.1 may swap to a deferred
+		// turn_end listener if the synthetic distinction matters.
+		void this.session
+			.prompt(approvedPrompt, { streamingBehavior: "followUp" })
+			.catch((err) => {
+				log.warn(`synthetic approved-plan prompt failed for ${this.sessionId}`, err);
+			});
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: `Plan approved. Executing from ${resolvedPath}.`,
+				},
+			],
+			details: {
+				planFilePath: resolvedPath,
+				title: resolvedTitle,
+				planExists: true,
+			} satisfies PlanApprovalDetails,
+		};
 	}
 
 	async #readPlanFile(planFilePath: string): Promise<string | null> {

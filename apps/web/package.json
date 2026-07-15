@@ -28,7 +28,7 @@
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"react-force-graph-2d": "^1.29.1",
-		"react-i18next": "^17.0.9",
+		"react-i18next": "^17.0.10",
 		"react-markdown": "^10.1.0",
 		"react-router-dom": "^7.18.1",
 		"react-syntax-highlighter": "^16.1.1",
@@ -44,7 +44,7 @@
 		"@types/react-dom": "^19.2.3",
 		"@types/react-syntax-highlighter": "^15.5.13",
 		"@vitejs/plugin-react": "^6.0.3",
-		"autoprefixer": "^10.5.2",
+		"autoprefixer": "^10.5.3",
 		"tailwindcss": "^4.3.2",
 		"typescript": "^7.0.2",
 		"vite": "^8.1.4"
