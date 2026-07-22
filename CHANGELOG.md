@@ -5,6 +5,33 @@ All notable changes to omp-deck. The format is loosely based on
 
 ## [Unreleased]
 
+### Added
+
+- **Unified model & provider workspace** (`Settings → Providers`) with a master/detail layout and four editor tabs (Connection, Models, Advanced, Diagnostics).
+  - **Native `models.yml` storage** under `<agentDir>/models.yml`; managed credential variables land in `<agentDir>/.env` with `0600` permissions.
+  - **Write-only credentials** — the server never returns API keys or header values; the UI only renders `configured / source / managed` badges.
+  - **Catalog modes** (`dynamic / pinned / hybrid / builtin`) with explicit conversion dialogs.
+  - **Four-stage import wizard** for cc-switch (Scan → Select → Map → Preview → Commit) with redacted previews and explicit `replace` confirmation.
+  - **Legacy extension migration + rollback** for prior `ccswitch-*` extensions, with manual-mapping fallback when safe reconstruction is unavailable.
+  - **Diagnostic probes** (endpoint / auth / discovery / inference) with explicit opt-in for inference (never a side effect of discovery or save).
+  - **`models_changed` broadcast** invalidates the model picker, session launch dialog, workspace defaults, and role settings in real time.
+- **REST surface** at `/api/model-providers/*` covering list / get / put / delete / discover / probe / refresh / imports / legacy endpoints. New protocol types in `@omp-deck/protocol`.
+
+### Changed
+
+- **OAuth Flow Modal** is now opened from the unified inventory's "Add a provider" panel for any OAuth option, with a single shared `ProviderWorkspace` orchestrating login, drafts, save/discard, and conflict recovery.
+
+### Deprecated
+
+- **`POST /api/ccswitch/import` is retired (HTTP 410 Gone)**. Extension generation is no longer reachable; migration happens via `/api/model-providers/imports/preview` → `/imports/commit` followed by the legacy migrate/rollback endpoints when needed.
+- **Old `ProvidersSection` and `lib/ccswitch-api.ts`** have been removed; the model & provider workspace is the only entry point.
+
+### Security
+
+- API keys are write-only: list endpoints return `ProviderCredentialMetadata` with `source / managed / configured / count` only; mutation endpoints accept a `ProviderCredentialOperation` with `set` (write), `remove`, or `preserve`.
+- Server-side credential redaction across discovery, probe, refresh, preview, and commit responses.
+- Web settings section navigation moved into `Layout.sidebar`; the duplicated inner rail was removed so the workspace always has full vertical space.
+
 ### Fixed
 
 - **StatusBar incorrectly flips from "streaming" back to "ready" mid-turn** whenever the model pauses for more than ~15 seconds (slow generation, rate-limit backoff, network stall, or extended thinking). The deck's streaming-watchdog existed to catch *post-reconnect* zombies (snapshot said `isStreaming=true` but the upstream request actually died before WS reconnect), but it was being re-armed on every event during normal streaming too — so a 15-second lull in the event stream would prematurely reset `session.status` to `"idle"`, which renders as the `"ready"` label. The watchdog now only arms at the reconnect boundary; live events clear it (proving the connection is healthy) and `turn_start` / `turn_end` are the sole authority on whether a turn is in flight. 5 new contract tests on `__test__` in `apps/web/src/lib/store.ts` pin the behavior.

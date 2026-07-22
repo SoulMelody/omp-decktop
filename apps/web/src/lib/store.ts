@@ -422,6 +422,16 @@ interface StoreState {
 	kbChangeCounter: number;
 
 	/**
+	 * Mirror of {@link tasksChangeCounter} for the model + provider catalog.
+	 * Bumped on every `models_changed` frame from the server (cc-switch legacy
+	 * retirement, native `models.yml` mutation, OAuth registry refresh, or a
+	 * forced dynamic-provider refresh). The provider workspace, model picker,
+	 * session launch dialog, and model-role defaults subscribe so their caches
+	 * stay aligned without polling or manual reloads.
+	 */
+	modelsChangeCounter: number;
+
+	/**
 	 * Per-session open extension-UI dialog (currently used by the SDK `ask`
 	 * tool, but the channel is shape-typed to cover any extension dialog).
 	 * At most one dialog per session is open at a time because the SDK awaits
@@ -539,6 +549,7 @@ export const useStore = create<StoreState>()(
 		tasksChangeCounter: 0,
 		skillsChangeCounter: 0,
 		kbChangeCounter: 0,
+		modelsChangeCounter: 0,
 		pendingDialogs: {},
 		heartbeat: null,
 		notifications: [],
@@ -1012,6 +1023,10 @@ function handleFrame(
 
 		case "kb_changed":
 			set((s) => ({ kbChangeCounter: s.kbChangeCounter + 1 }));
+			return;
+
+		case "models_changed":
+			set((s) => ({ modelsChangeCounter: s.modelsChangeCounter + 1 }));
 			return;
 
 		case "ext_ui_dialog_open":

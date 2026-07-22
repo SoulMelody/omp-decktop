@@ -10,7 +10,7 @@ import { EnvSection } from "@/components/settings/EnvSection";
 import { MessagingSection } from "@/components/settings/MessagingSection";
 import { OrientationSection } from "@/components/settings/OrientationSection";
 import { NotificationsSection } from "@/components/settings/NotificationsSection";
-import { ProvidersSection } from "@/components/settings/ProvidersSection";
+import { ProviderWorkspace } from "@/components/settings/providers/ProviderWorkspace";
 import { DapSection } from "@/components/settings/DapSection";
 import { LspSection } from "@/components/settings/LspSection";
 import { SECTIONS, normalizeSection, type SectionId } from "@/components/settings/settings-helpers";
@@ -31,7 +31,7 @@ export function SettingsView() {
 
 	return (
 		<Layout
-			sidebar={<SettingsSideRail />}
+			sidebar={<SettingsSideRail selected={selected} onSelect={setSection} />}
 			inspector={<SettingsInspector />}
 			main={
 				<div className="flex h-full min-h-0 flex-col">
@@ -39,51 +39,31 @@ export function SettingsView() {
 						<div className="meta">{t("settings.title")}</div>
 						<div className="text-xs text-ink-3">{t("settings.subtitle")}</div>
 					</div>
-					<div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] overflow-hidden">
-						<nav className="border-r border-line bg-paper-2/40 p-2">
-							{SECTIONS.map((section) => (
-								<button
-									key={section.id}
-									type="button"
-									onClick={() => setSection(section.id)}
-									className={cn(
-										"mb-1 block w-full rounded-md px-2 py-2 text-left transition-colors",
-										selected === section.id ? "bg-accent-soft text-accent" : "hover:bg-paper-3",
-									)}
-								>
-									<div className="font-mono text-xs font-medium uppercase tracking-meta">
-										{section.label}
-									</div>
-									<div className="mt-0.5 text-xs text-ink-3">{section.description}</div>
-								</button>
-							))}
-						</nav>
-						<section className="min-h-0 overflow-auto p-4">
-							{selected === "env" ? (
-								<EnvSection />
-							) : selected === "providers" ? (
-								<ProvidersSection />
-							) : selected === "messaging" ? (
-								<MessagingSection />
-							) : selected === "orientation" ? (
-								<OrientationSection />
-							) : selected === "appearance" ? (
-								<AppearanceSection />
-							) : selected === "notifications" ? (
-								<NotificationsSection />
-							) : selected === "modelRoles" ? (
-								<ModelRolesSection />
-							) : selected === "workspaces" ? (
-								<WorkspacesSection />
-							) : selected === "lsp" ? (
-								<LspSection />
-							) : selected === "dap" ? (
-								<DapSection />
-							) : (
-								<StubSection section={selected} />
-							)}
-						</section>
-					</div>
+					<section className="min-h-0 flex-1 overflow-auto">
+						{selected === "env" ? (
+							<EnvSection />
+						) : selected === "providers" ? (
+							<ProviderWorkspace />
+						) : selected === "messaging" ? (
+							<MessagingSection />
+						) : selected === "orientation" ? (
+							<OrientationSection />
+						) : selected === "appearance" ? (
+							<AppearanceSection />
+						) : selected === "notifications" ? (
+							<NotificationsSection />
+						) : selected === "modelRoles" ? (
+							<ModelRolesSection />
+						) : selected === "workspaces" ? (
+							<WorkspacesSection />
+						) : selected === "lsp" ? (
+							<LspSection />
+						) : selected === "dap" ? (
+							<DapSection />
+						) : (
+							<StubSection section={selected} />
+						)}
+					</section>
 				</div>
 			}
 		/>
@@ -194,9 +174,38 @@ function WorkspacesSection() {
 	);
 }
 
-function SettingsSideRail() {
+function SettingsSideRail({
+	selected,
+	onSelect,
+}: {
+	selected: SectionId;
+	onSelect: (section: SectionId) => void;
+}) {
 	const { t } = useTranslation();
-	return <div className="p-3 text-xs text-ink-3">{t("settings.title")}</div>;
+	return (
+		<div className="flex h-full min-h-0 flex-col gap-1 overflow-auto p-3">
+			<div className="meta mb-1 text-ink-3">{t("settings.title")}</div>
+			<nav className="flex flex-col" aria-label={t("settings.title")}>
+				{SECTIONS.map((section) => (
+					<button
+						key={section.id}
+						type="button"
+						onClick={() => onSelect(section.id)}
+						className={cn(
+							"mb-1 block w-full rounded-md px-2 py-2 text-left transition-colors",
+							selected === section.id ? "bg-accent-soft text-accent" : "hover:bg-paper-3",
+						)}
+						aria-current={selected === section.id ? "page" : undefined}
+					>
+						<div className="font-mono text-xs font-medium uppercase tracking-meta">
+							{section.label}
+						</div>
+						<div className="mt-0.5 text-xs text-ink-3">{section.description}</div>
+					</button>
+				))}
+			</nav>
+		</div>
+	);
 }
 
 function SettingsInspector() {

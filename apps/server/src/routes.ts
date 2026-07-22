@@ -39,6 +39,8 @@ import { buildCcSwitchRouter } from "./routes-ccswitch.ts";
 import { buildTerminalRouter } from "./routes-terminal.ts";
 import { buildAgentOutputRouter } from "./routes-agent-output.ts";
 import { buildFsReadRouter } from "./routes-fs-read.ts";
+import { buildProviderImportRoutes } from "./routes-imports.ts";
+import { buildModelProvidersRouter, createModelProvidersRoutes } from "./routes-model-providers.ts";
 import { mcpApp } from "./routes-mcp.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
@@ -395,6 +397,8 @@ export function buildRouter(
 	app.route("/auth/oauth", buildAuthOAuthRouter());
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/ccswitch", buildCcSwitchRouter({ cwd: config.defaultCwd }));
+	app.route("/model-providers", createModelProvidersRoutes().router);
+	app.route("/model-providers", buildProviderImportRoutes());
 	app.route("/mcp", mcpApp);
 	app.route("/", buildTerminalRouter());
 

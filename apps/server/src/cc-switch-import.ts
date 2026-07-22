@@ -22,6 +22,7 @@ import * as path from "node:path";
 
 import type { CcSwitchProvider } from "@omp-deck/protocol";
 import { logger } from "./log.ts";
+import { MODELS_API_FORMAT_MAP } from "./cc-switch-mapping.ts";
 
 const log = logger("cc-switch-import");
 
@@ -31,8 +32,14 @@ const API_FORMAT_MAP: Record<string, string> = {
 	openai_chat: "openai-completions",
 	openai_responses: "openai-responses",
 	anthropic: "anthropic-messages",
-	gemini: "google-genai",
+	gemini: "google-generative-ai",
+	vertex: "google-vertex",
+	codex: "openai-codex-responses",
+	azure: "azure-openai-responses",
+	gemini_cli: "google-gemini-cli",
 };
+
+void MODELS_API_FORMAT_MAP;
 
 /**
  * Resolve the default cc-switch database path.

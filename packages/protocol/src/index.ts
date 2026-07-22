@@ -2111,6 +2111,411 @@ export interface ListFilePathsResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Models and providers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** API adapters supported by the installed OMP 17 models.yml schema. */
+export type ModelProviderApi =
+	| "openai-completions"
+	| "openai-responses"
+	| "openai-codex-responses"
+	| "azure-openai-responses"
+	| "anthropic-messages"
+	| "google-generative-ai"
+	| "google-gemini-cli"
+	| "google-vertex";
+
+export type ModelProviderDiscoveryType =
+	| "ollama"
+	| "llama.cpp"
+	| "lm-studio"
+	| "openai-models-list"
+	| "proxy"
+	| "litellm";
+
+export type ModelProviderAuthMode = "apiKey" | "none" | "oauth";
+export type ModelThinkingEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ModelThinkingMode =
+	| "effort"
+	| "budget"
+	| "google-level"
+	| "anthropic-adaptive"
+	| "anthropic-budget-effort";
+
+export type ProviderSourceLayer =
+	| "models-config"
+	| "oauth"
+	| "environment"
+	| "implicit"
+	| "extension";
+
+export type ProviderCredentialSource =
+	| "managed-env"
+	| "external-env"
+	| "command"
+	| "literal"
+	| "oauth"
+	| "none";
+
+export type ProviderCatalogMode = "dynamic" | "pinned" | "hybrid" | "builtin";
+export type ProviderHealth = "ready" | "needs-auth" | "config-error" | "discovery-warning" | "legacy";
+export type ProviderDiscoveryStatus = "idle" | "ok" | "empty" | "cached" | "unavailable" | "unauthenticated";
+export type ModelValueProvenance = "edit" | "configured" | "registry" | "remote" | "inherited" | "fallback";
+
+export interface ProviderCredentialMetadata {
+	configured: boolean;
+	source: ProviderCredentialSource;
+	count: number;
+	/** Environment variable name is intentionally omitted for managed values. */
+	managed: boolean;
+}
+
+export interface ProviderDiscoveryStateWire {
+	status: ProviderDiscoveryStatus;
+	optional: boolean;
+	stale: boolean;
+	fetchedAt?: number;
+	modelIds: string[];
+	error?: string;
+}
+
+export interface RedactedModelDefinition {
+	id: string;
+	name?: string;
+	api?: ModelProviderApi;
+	baseUrl?: string;
+	reasoning?: boolean;
+	thinking?: {
+		mode: ModelThinkingMode;
+		efforts: ModelThinkingEffort[];
+		defaultLevel?: ModelThinkingEffort;
+		effortMap?: Partial<Record<ModelThinkingEffort, string>>;
+		supportsDisplay?: boolean;
+	};
+	input?: Array<"text" | "image">;
+	supportsTools?: boolean;
+	cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	premiumMultiplier?: number;
+	contextWindow?: number;
+	maxTokens?: number;
+	omitMaxOutputTokens?: boolean;
+	headers?: Record<string, string>;
+	compat?: Record<string, unknown>;
+	contextPromotionTarget?: string;
+	compactionModel?: string;
+	remoteCompaction?: Record<string, unknown>;
+	/** Opaque installed-SDK fields preserved by the advanced editor. */
+	[key: string]: unknown;
+}
+
+export interface RedactedModelOverride {
+	name?: string;
+	reasoning?: boolean;
+	thinking?: RedactedModelDefinition["thinking"];
+	input?: Array<"text" | "image">;
+	supportsTools?: boolean;
+	cost?: Partial<{ input: number; output: number; cacheRead: number; cacheWrite: number }>;
+	premiumMultiplier?: number;
+	contextWindow?: number;
+	maxTokens?: number;
+	omitMaxOutputTokens?: boolean;
+	headers?: Record<string, string>;
+	compat?: Record<string, unknown>;
+	contextPromotionTarget?: string;
+	compactionModel?: string;
+	remoteCompaction?: Record<string, unknown>;
+	[key: string]: unknown;
+}
+
+/** Browser-safe models.yml provider node. `apiKey` is never represented. */
+export interface RedactedProviderDefinition {
+	baseUrl?: string;
+	api?: ModelProviderApi;
+	headers?: Record<string, string>;
+	compat?: Record<string, unknown>;
+	remoteCompaction?: Record<string, unknown>;
+	authHeader?: boolean;
+	auth?: ModelProviderAuthMode;
+	discovery?: { type: ModelProviderDiscoveryType };
+	models?: RedactedModelDefinition[];
+	modelOverrides?: Record<string, RedactedModelOverride>;
+	disableStrictTools?: boolean;
+	transport?: "pi-native";
+	/** Opaque fields are round-tripped but still subject to installed-SDK validation. */
+	[key: string]: unknown;
+}
+
+export interface ProviderCatalogSummary {
+	mode: ProviderCatalogMode;
+	modelCount: number;
+}
+
+export interface ProviderRuntimeSummary {
+	availableModelCount: number;
+	discovery?: ProviderDiscoveryStateWire;
+}
+
+export interface LegacyProviderMetadata {
+	extensionPath: string;
+	backupPath?: string;
+	providerId: string;
+	sourceKey?: string;
+	automaticMigration: boolean;
+	status: "active" | "disabled-backup";
+}
+
+export interface ModelProviderRecord {
+	id: string;
+	label: string;
+	layers: ProviderSourceLayer[];
+	editable: boolean;
+	definition?: RedactedProviderDefinition;
+	credential: ProviderCredentialMetadata;
+	catalog: ProviderCatalogSummary;
+	runtime: ProviderRuntimeSummary;
+	health: ProviderHealth;
+	configError?: string;
+	legacy?: LegacyProviderMetadata;
+}
+
+export interface ModelProviderOption {
+	id: string;
+	label: string;
+	kind: "oauth" | "custom";
+}
+
+export interface ModelProviderCompatibility {
+	apis: ModelProviderApi[];
+	discoveryTypes: ModelProviderDiscoveryType[];
+	authModes: ModelProviderAuthMode[];
+	thinkingModes: ModelThinkingMode[];
+	thinkingEfforts: ModelThinkingEffort[];
+	secretSentinel: string;
+}
+
+export interface ListModelProvidersResponse {
+	revision: string;
+	paths: { models: string; env: string };
+	providers: ModelProviderRecord[];
+	addable: ModelProviderOption[];
+	compatibility: ModelProviderCompatibility;
+}
+
+export type ProviderCredentialOperation =
+	| { action: "preserve" }
+	| { action: "set"; value: string }
+	| { action: "remove" };
+
+export interface PutModelProviderRequest {
+	revision: string;
+	definition: RedactedProviderDefinition;
+	credential?: ProviderCredentialOperation;
+	/** Required when a reviewed catalog conversion removes native fields. */
+	modeConversionConfirmed?: boolean;
+}
+
+export interface DeleteModelProviderRequest {
+	revision: string;
+	confirm: true;
+}
+
+export interface ModelProviderMutationResponse extends ListModelProvidersResponse {
+	provider: ModelProviderRecord;
+}
+
+export interface ProviderRevisionConflictResponse {
+	error: "revision-conflict";
+	message: string;
+	revision: string;
+}
+
+export interface ProviderValidationIssue {
+	path: string;
+	message: string;
+}
+
+export interface ProviderDraft {
+	id?: string;
+	definition: RedactedProviderDefinition;
+	/** Write-only and never echoed by discovery or diagnostics responses. */
+	apiKey?: string;
+}
+
+export interface DiscoveredModel {
+	id: string;
+	name?: string;
+	metadata?: Partial<RedactedModelDefinition>;
+	provenance?: Partial<Record<keyof RedactedModelDefinition, ModelValueProvenance>>;
+	manual?: boolean;
+}
+
+export type ProviderDiscoverySource = "remote" | "omp-registry" | "configured" | "none";
+export type ProviderAttemptOutcome = "success" | "http-error" | "timeout" | "incompatible" | "empty" | "too-large" | "network-error";
+
+export interface ProviderNetworkAttempt {
+	url: string;
+	outcome: ProviderAttemptOutcome;
+	status?: number;
+	latencyMs?: number;
+	detail?: string;
+	modelCount?: number;
+}
+
+export interface DiscoverModelsRequest {
+	providerId?: string;
+	draft?: ProviderDraft;
+	forceRefresh?: boolean;
+}
+
+export interface DiscoverModelsResponse {
+	source: ProviderDiscoverySource;
+	models: DiscoveredModel[];
+	attempts: ProviderNetworkAttempt[];
+	warnings: string[];
+	discovery?: ProviderDiscoveryStateWire;
+}
+
+export type ProviderDiagnosticStatus = "pass" | "fail" | "skip" | "unsupported";
+export type ProviderDiagnosticCheckId = "endpoint" | "authentication" | "discovery" | "inference";
+
+export interface ProviderDiagnosticCheck {
+	id: ProviderDiagnosticCheckId;
+	status: ProviderDiagnosticStatus;
+	detail: string;
+	latencyMs?: number;
+	source?: ProviderDiscoverySource;
+	adapter?: ModelProviderApi | "auto";
+}
+
+export interface ProbeProviderRequest {
+	providerId?: string;
+	draft?: ProviderDraft;
+	inference?: { enabled: boolean; modelId?: string; api?: ModelProviderApi | "auto" };
+}
+
+export interface ProbeProviderResponse {
+	checks: ProviderDiagnosticCheck[];
+	attempts: ProviderNetworkAttempt[];
+	runAt: string;
+}
+
+export interface RefreshModelProviderResponse {
+	providerId: string;
+	discovery?: ProviderDiscoveryStateWire;
+	modelCount: number;
+}
+
+export type CatalogConversionDirection = "dynamic-to-pinned" | "pinned-to-dynamic";
+
+export interface CatalogConversionPreview {
+	direction: CatalogConversionDirection;
+	definition: RedactedProviderDefinition;
+	addedFields: string[];
+	removedFields: string[];
+	warnings: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider import and legacy migration
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProviderImportCandidate {
+	sourceKey: string;
+	id: string;
+	appType: string;
+	name: string;
+	baseUrl?: string;
+	apiFormat?: string;
+	suggestedApi?: ModelProviderApi;
+	category?: string;
+	isCurrent: boolean;
+	modelHint?: string;
+	credentialConfigured: boolean;
+	status: "ready" | "manual-mapping" | "unavailable";
+	warning?: string;
+}
+
+export interface ScanProviderImportsResponse {
+	dbPath: string;
+	accessible: boolean;
+	fingerprint?: string;
+	candidates: ProviderImportCandidate[];
+	error?: string;
+}
+
+export type ProviderImportCollisionAction = "new" | "skip" | "merge" | "replace";
+export type ProviderImportCatalogStrategy = "dynamic" | "pinned" | "manual";
+
+export interface ProviderImportMapping {
+	sourceKey: string;
+	targetId: string;
+	api: ModelProviderApi;
+	baseUrl?: string;
+	migrateCredential: boolean;
+	catalogStrategy: ProviderImportCatalogStrategy;
+	collisionAction: ProviderImportCollisionAction;
+	confirmReplace?: boolean;
+}
+
+export interface PreviewProviderImportRequest {
+	revision: string;
+	sourceFingerprint: string;
+	mappings: ProviderImportMapping[];
+}
+
+export interface ProviderImportPreviewEntry {
+	sourceKey: string;
+	targetId: string;
+	action: ProviderImportCollisionAction;
+	definition?: RedactedProviderDefinition;
+	credentialConfigured: boolean;
+	managedCredentialReference?: string;
+	changes: string[];
+	warnings: string[];
+}
+
+export interface PreviewProviderImportResponse {
+	revision: string;
+	sourceFingerprint: string;
+	previewToken: string;
+	paths: { models: string; env: string };
+	entries: ProviderImportPreviewEntry[];
+	warnings: string[];
+}
+
+export interface CommitProviderImportRequest extends PreviewProviderImportRequest {
+	previewToken: string;
+}
+
+export interface ProviderImportCommitEntry {
+	sourceKey: string;
+	targetId: string;
+	status: "imported" | "merged" | "replaced" | "skipped";
+}
+
+export interface CommitProviderImportResponse extends ListModelProvidersResponse {
+	results: ProviderImportCommitEntry[];
+}
+
+export interface MigrateLegacyProviderRequest {
+	revision: string;
+	extensionPath: string;
+	mapping?: ProviderImportMapping;
+}
+
+export interface RollbackLegacyProviderRequest {
+	revision: string;
+	providerId: string;
+	backupPath: string;
+}
+
+export interface LegacyProviderMutationResponse extends ListModelProvidersResponse {
+	providerId: string;
+	extensionPath: string;
+	backupPath?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Auth providers / OAuth login flow (driven from Settings → Providers)
 // ─────────────────────────────────────────────────────────────────────────────
 

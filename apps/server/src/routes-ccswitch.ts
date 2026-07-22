@@ -65,83 +65,20 @@ export function buildCcSwitchRouter(opts: { cwd?: string } = {}): Hono {
 		}
 	});
 
-	// ── POST /import ────────────────────────────────────────────────────────
-	app.post("/import", async (c) => {
-		let req: CcSwitchImportRequest;
-		try {
-			req = (await c.req.json()) as CcSwitchImportRequest;
-		} catch {
-			return c.json({ error: "invalid json body" }, 400);
-		}
-
-		if (!Array.isArray(req.providerKeys) || req.providerKeys.length === 0) {
-			return c.json({ error: "providerKeys must be a non-empty array" }, 400);
-		}
-
-		const dbPath = req.dbPath || resolveCcSwitchDbPath();
-		if (!existsSync(dbPath)) {
-			return c.json({ error: `cc-switch database not found at: ${dbPath}` }, 404);
-		}
-
-		let allProviders;
-		try {
-			allProviders = readCcSwitchProviders(dbPath);
-		} catch (err) {
-			return c.json({ error: String(err) }, 500);
-		}
-
-		// Build lookup by composite key: "id|appType"
-		const byKey = new Map(allProviders.map((p) => [`${p.id}|${p.appType}`, p]));
-		// Also allow lookup by just id (for de-duplicated entries)
-		const byId = new Map(allProviders.map((p) => [p.id, p]));
-
-		const results: CcSwitchImportResultEntry[] = [];
-		let okCount = 0;
-		let errorCount = 0;
-
-		for (const key of req.providerKeys) {
-			const provider = byKey.get(key) ?? byId.get(key);
-			if (!provider) {
-				results.push({ key, name: key, status: "error", error: "provider not found in DB" });
-				errorCount++;
-				continue;
-			}
-
-			if (!provider.apiType) {
-				results.push({
-					key,
-					name: provider.name,
-					status: "error",
-					error: `unsupported apiFormat: ${String(provider.meta.apiFormat ?? "unknown")}`,
-				});
-				errorCount++;
-				continue;
-			}
-
-			try {
-				const extDir = await writeCcSwitchExtension(provider);
-				results.push({ key, name: provider.name, status: "ok", extensionDir: extDir });
-				okCount++;
-				log.info(`imported cc-switch provider "${provider.name}" → ${extDir}`);
-			} catch (err) {
-				results.push({ key, name: provider.name, status: "error", error: String(err) });
-				errorCount++;
-				log.error(`failed to import cc-switch provider "${provider.name}"`, err);
-			}
-		}
-
-		// Notify connected clients that new models may be available.
-		if (okCount > 0) {
-			await refreshDeckExtensionProviders(opts.cwd ?? process.cwd());
-			broadcastBus.broadcast({ type: "models_changed" });
-		}
-
-		const body: CcSwitchImportResponse = {
-			imported: results,
-			okCount,
-			errorCount,
-		};
-		return c.json(body);
+	// ── POST /import ── RETIRED 410 Gone ── Use POST /api/model-providers/imports/preview then /commit
+	app.post("/import", (c) => {
+		return c.json(
+			{
+				error: "endpoint-retired",
+				status: 410,
+				message: "cc-switch extension generation has been retired; use /api/model-providers/imports/preview and /commit instead.",
+				replacement: {
+					preview: "POST /api/model-providers/imports/preview",
+					commit: "POST /api/model-providers/imports/commit",
+				},
+			},
+			410,
+		);
 	});
 
 	return app;

@@ -126,6 +126,21 @@ The short version: **Claude Code** is the polished vendor experience for Claude.
 
 **State is yours.** Tasks, inbox, routines, KB — all SQLite + plain markdown on disk. No telemetry. The deck never logs secret values, only redacted forms.
 
+## Model & provider workspace
+
+The deck owns a **unified model & provider workspace** under `Settings → Providers` (open `/settings?section=providers`):
+
+- **Master/detail with responsive layout.** A search + filter list on the left (all / ready / needs-attention / legacy), an editor on the right with **Connection / Models / Advanced / Diagnostics** tabs. On mobile the list and detail swap as separate routes.
+- **Native `models.yml` storage.** Everything lives in `<agentDir>/models.yml` and `<agentDir>/.env`. The deck never generates `ccswitch-*` extensions anymore; that flow is retired and `POST /api/ccswitch/import` now returns **410 Gone** with a pointer to the replacement endpoints.
+- **Write-only credentials.** Provider API keys are write-only — the server only returns `managed / external env / OAuth / command / literal / none`, never the raw value. Replace or remove them in-place without an eye button.
+- **Catalog modes per provider.** `dynamic` (registry on session start), `pinned` (explicit `models[]`), `hybrid` (both), `builtin`. Mode conversions go through a confirmation dialog.
+- **Import wizard.** Four-step: scan → select → map → preview → commit. Source fingerprint is re-checked server-side before commit; collisions resolve as `skip / merge / replace` with explicit confirmation for destructive replace.
+- **Legacy migration.** Older `ccswitch-*` extensions are surfaced as `legacy` records in the inventory and can be migrated (with manual mapping fallback) or rolled back from `disabled-extensions/` backups.
+- **Diagnostics.** Endpoint, auth, discovery, and (opt-in) inference probes run independently with `pass / fail / skip / unsupported` outcomes. Inference is never enabled as a side effect of discovery or save — the user must tick the cost-warning acknowledgement to opt in.
+- **Live updates.** Every mutation broadcasts `models_changed`; the picker, session launch dialog, and model-role defaults subscribe via `modelsChangeCounter` and refresh without reloads.
+
+The REST surface for this lives at `/api/model-providers/*` (see `routes-model-providers.ts` and `routes-imports.ts`). The protocol types live in `packages/protocol/src/index.ts`.
+
 ## Docs
 
 - [Install](./docs/install.md) — fresh vs existing-omp install paths.
