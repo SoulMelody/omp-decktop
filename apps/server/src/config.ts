@@ -22,6 +22,22 @@ export interface Config {
 	 * ~/.omp/agent/commands/start.md slash command if present).
 	 */
 	autoStartCommand: string | null;
+	/**
+	 * Enable the background command runner (`POST /fs/exec`). Default false —
+	 * the runner is opt-in so a misconfigured server cannot execute arbitrary
+	 * commands even from loopback callers.
+	 */
+	enableFsExec: boolean;
+	/** Hard timeout for `/fs/exec` jobs in ms (also the per-job cap). */
+	execTimeoutMs: number;
+	/** Hard timeout for `git clone` in ms. */
+	cloneTimeoutMs: number;
+	/** Maximum decoded bytes accepted by `POST /fs/write`. Default 5 MB. */
+	maxWriteBytes: number;
+	/** Maximum bytes streamed by `GET /fs/raw`. Default 50 MB. */
+	maxRawBytes: number;
+	/** Rate-limit `/fs/clone` to N requests per window per cwd. */
+	cloneRateLimit: { maxPerWindow: number; windowMs: number };
 }
 
 export function parseInt10(value: string | undefined, fallback: number): number {
@@ -105,5 +121,23 @@ export function loadConfig(): Config {
 		// Set OMP_DECK_AUTO_START="" or "0" to disable, or to any other prompt
 		// string to override the default "/start" slash-command invocation.
 		autoStartCommand: parseAutoStart(process.env.OMP_DECK_AUTO_START),
+		// Default OFF: the runner is a sharp tool and must be opted in.
+		enableFsExec: parseBool10(process.env.OMP_DECK_ENABLE_FS_EXEC, false),
+		execTimeoutMs: parseInt10(process.env.OMP_DECK_EXEC_TIMEOUT_MS, 30_000),
+		cloneTimeoutMs: parseInt10(process.env.OMP_DECK_CLONE_TIMEOUT_MS, 120_000),
+		maxWriteBytes: parseInt10(process.env.OMP_DECK_MAX_WRITE_BYTES, 5_000_000),
+		maxRawBytes: parseInt10(process.env.OMP_DECK_MAX_RAW_BYTES, 50_000_000),
+		cloneRateLimit: {
+			maxPerWindow: parseInt10(process.env.OMP_DECK_CLONE_RATE_MAX, 1),
+			windowMs: parseInt10(process.env.OMP_DECK_CLONE_RATE_WINDOW_MS, 10_000),
+		},
 	};
+}
+
+export function parseBool10(value: string | undefined, fallback: boolean): boolean {
+	if (value === undefined) return fallback;
+	const v = value.trim().toLowerCase();
+	if (v === "" || v === "0" || v === "false" || v === "no") return false;
+	if (v === "1" || v === "true" || v === "yes") return true;
+	return fallback;
 }

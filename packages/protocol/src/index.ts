@@ -13,7 +13,7 @@
  */
 
 // Re-export the V1 routine spec validator. JSON Schemas live in src/schemas/.
-export { validateRoutineSpec } from "./validate";
+export { validateRoutineSpec, validateEndpointRequest } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2109,6 +2109,583 @@ export interface ListFilePathsResponse {
 	/** `true` when the underlying file list was served from a cached snapshot. */
 	cached: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem read/metadata/binary (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsEntryMeta {
+	name: string;
+	/** Path relative to cwd, forward slashes. */
+	path: string;
+	isDir: boolean;
+	isFile: boolean;
+	isSymlink: boolean;
+	size?: number;
+	mtimeMs?: number;
+	/** POSIX mode bits, present for Unix-like platforms. */
+	mode?: number;
+	/** MIME guess from extension + content sniff (best effort). */
+	mime?: string;
+	/**
+	 * Git status code if the workspace is a repo and the file is tracked /
+	 * untracked. Matches the porcelain-v2 single-letter summary:
+	 * `M` (modified), `A` (added), `D` (deleted), `?` (untracked), `R` (renamed),
+	 * `C` (copied), `U` (unmerged), or `null` when clean / not in a repo.
+	 */
+	gitStatus?: "M" | "A" | "D" | "?" | "R" | "C" | "U" | null;
+}
+
+export interface FsStatOk { ok: true; entry: FsEntryMeta; }
+export interface FsStatErr { ok: false; error: string; }
+export type FsStatResponse = FsStatOk | FsStatErr;
+
+export interface FsHomeResponse { home: string; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem write/manage (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** `cwd` is the absolute workspace root the request is anchored to. */
+interface FsAnchoredRequest {
+	cwd: string;
+	/** Path relative to cwd, forward slashes. */
+	path: string;
+	/**
+	 * Optional grant token authorizing a single op on a target outside the
+	 * workspace roots. Required when the resolved target is outside any
+	 * allowed root; ignored otherwise.
+	 */
+	grantToken?: string;
+}
+
+export interface FsMkdirRequest extends FsAnchoredRequest {
+	recursive?: boolean;
+}
+
+export interface FsWriteRequest extends FsAnchoredRequest {
+	/** UTF-8 text by default; pass `base64` for binary content. */
+	content: string;
+	encoding?: "utf-8" | "base64";
+	/** When set, the server refuses with 409 stale if the file's sha256 changed since this value. */
+	expectedSha256?: string;
+}
+
+export interface FsWriteOk {
+	ok: true;
+	path: string;
+	size: number;
+	sha256: string;
+}
+
+export interface FsWriteErr { ok: false; error: string; stale?: { serverSha256: string; serverSize: number } }
+export type FsWriteResponse = FsWriteOk | FsWriteErr;
+
+export interface FsRenameRequest {
+	cwd: string;
+	from: string;
+	to: string;
+	overwrite?: boolean;
+	grantToken?: string;
+}
+
+export interface FsRenameResponse { ok: true; path: string }
+export interface FsRenameErr     { ok: false; error: string }
+
+export interface FsDeleteRequest extends FsAnchoredRequest {
+	recursive?: boolean;
+}
+
+export interface FsOkResponse    { ok: true; path?: string }
+export interface FsErrResponse   { ok: false; error: string }
+export type FsSimpleResponse = FsOkResponse | FsErrResponse;
+
+export interface FsRevealRequest {
+	cwd?: string;
+	path: string;
+	via?: "browser" | "desktop";
+}
+
+export interface FsRevealResponse {
+	ok: boolean;
+	hint?: "browser" | "desktop" | string;
+	error?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem search (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsSearchRequest {
+	cwd: string;
+	q: string;
+	type?: "file" | "directory" | "all";
+	/** Include directories in results (default false). */
+	dirs?: boolean;
+	limit?: number;
+	/** Filter hits that are git-ignored. Default true. */
+	respectGitignore?: boolean;
+}
+
+export interface FsSearchResponse {
+	ok: true;
+	hits: FsEntryMeta[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Repository clone (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsCloneRequest {
+	cwd: string;
+	remoteUrl: string;
+	/** Destination path *relative to cwd*. Must include a directory name, OR end with `/` to use the inferred repo name. */
+	destinationPath: string;
+	/** Optional identity id from /git/identities used for SSH-based clones. */
+	identityId?: string;
+}
+
+export interface FsCloneResponse {
+	ok: true;
+	path: string;
+	defaultBranch?: string;
+}
+
+export interface FsCloneErrResponse { ok: false; error: string }
+export type FsCloneResult = FsCloneResponse | FsCloneErrResponse;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem exec (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsExecRequest {
+	cwd: string;
+	cmd: string;
+	args?: string[];
+	/** Hard timeout in ms; default 30 000; max 600 000. */
+	timeoutMs?: number;
+	/** Optional human label for the UI ("npm install"). */
+	label?: string;
+}
+
+export type FsExecStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+
+export interface FsExecJobResponse {
+	jobId: string;
+	status: FsExecStatus;
+	/** Buffered stdout (UTF-8; binary-unsafe on purpose). Truncated at 256 KB. */
+	stdout: string;
+	/** Buffered stderr (UTF-8; binary-unsafe on purpose). Truncated at 256 KB. */
+	stderr: string;
+	exitCode: number | null;
+	startedAt: number;
+	finishedAt: number | null;
+	label?: string;
+	error?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem grants (Sprint 1: file-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsIssueGrantRequest {
+	/** Absolute path the grant is scoped to. */
+	path: string;
+	/** Lifetime in ms. Default 60 000; max 600 000. */
+	ttlMs?: number;
+	/** Optional reason string for audit logs. */
+	reason?: string;
+}
+
+export interface FsIssueGrantResponse { token: string; expiresAt: number }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filesystem editor (Sprint 2: file-editor)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FsEditorOpenRequest {
+	cwd: string;
+	path: string;
+}
+
+export interface FsEditorOpenResponse {
+	ok: true;
+	path: string;
+	content: string;
+	sha256: string;
+	size: number;
+	mime: string;
+}
+
+export interface FsEditorOpenErr { ok: false; error: string }
+export type FsEditorOpenResult = FsEditorOpenResponse | FsEditorOpenErr;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Git integration (Sprint 3: git-integration)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Single-letter status code from `git status --porcelain=v2`. */
+export type GitIndexStatus =
+	| " " | "M" | "A" | "D" | "R" | "C" | "U" | "?"
+	| "!" | "T" | "B";
+
+export interface GitStatusFile {
+	path: string;
+	/** HEAD-vs-index status (staged). " " = unchanged. */
+	index: GitIndexStatus;
+	/** Index-vs-working-tree status (unstaged). " " = unchanged. */
+	workingDir: GitIndexStatus;
+}
+
+export interface GitTracking {
+	remote: string;
+	branch: string;
+	ahead: number;
+	behind: number;
+}
+
+export interface GitMergeInProgress { head: string; message: string }
+export interface GitRebaseInProgress { headName: string; onto: string }
+
+export interface GitStatusResponse {
+	ok: true;
+	cwd: string;
+	branch: string;
+	tracking?: GitTracking;
+	files: GitStatusFile[];
+	isClean: boolean;
+	diffStats?: Record<string, { insertions: number; deletions: number }>;
+	mergeInProgress?: GitMergeInProgress;
+	rebaseInProgress?: GitRebaseInProgress;
+}
+
+export interface GitDiffRequest {
+	cwd: string;
+	/** Restrict to one path; omit for the whole tree. */
+	path?: string;
+	/** `true` for staged diff (`--cached`), default `false`. */
+	staged?: boolean;
+	contextLines?: number;
+}
+
+export interface GitDiffResponse {
+	ok: true;
+	patch: string;
+	insertions: number;
+	deletions: number;
+	binary: boolean;
+	files?: string[];
+}
+
+export interface GitRangeDiffRequest {
+	cwd: string;
+	base: string;
+	head: string;
+	path?: string;
+	contextLines?: number;
+}
+
+export interface GitFileDiffResponse {
+	ok: true;
+	original: string;
+	modified: string;
+	isBinary: boolean;
+}
+
+export interface GitStageRequest    { cwd: string; paths: string[]; }
+export interface GitUnstageRequest  { cwd: string; paths: string[]; }
+
+export interface GitRevertRequest {
+	cwd: string;
+	path: string;
+	scope?: "all" | "working";
+	confirm?: boolean;
+}
+
+export interface GitCommitRequest {
+	cwd: string;
+	message: string;
+	/** Optional: stage only these files (and unstage everything else) before committing. */
+	stageFiles?: string[];
+	/** Back-compat with older callers. */
+	files?: string[];
+	signOff?: boolean;
+	/** Internal flag from the UI; commits then pushes. */
+	pushAfter?: boolean;
+}
+
+export interface GitCommitResponse { ok: true; sha: string; pushed?: boolean }
+
+export interface GitPushRequest {
+	cwd: string;
+	remote?: string;
+	branch?: string;
+	/** `lease` requires `--force-with-lease`; otherwise push refuses if remote has new commits. */
+	force?: "lease" | "no";
+	confirm?: boolean;
+}
+
+export interface GitPushResponse { ok: true; setUpstream?: boolean; rejected?: boolean; reason?: string }
+
+export interface GitPullRequest {
+	cwd: string;
+	remote?: string;
+	branch?: string;
+	rebase?: boolean;
+	/** Default `ff-only` for safety; pass `true` to allow a merge commit. */
+	allowMergeCommit?: boolean;
+}
+
+export interface GitFetchRequest {
+	cwd: string;
+	remote?: string;
+	prune?: boolean;
+	timeoutMs?: number;
+}
+
+export interface GitFetchResponse { ok: true; fetched?: string[] }
+
+export interface GitBranchInfo {
+	name: string;
+	isCurrent: boolean;
+	isRemote: boolean;
+	upstream?: string;
+	lastCommitSha?: string;
+	lastCommitSubject?: string;
+}
+
+export interface GitBranchesResponse {
+	ok: true;
+	local: GitBranchInfo[];
+	remote: GitBranchInfo[];
+}
+
+export interface GitBranchCreateRequest {
+	cwd: string;
+	name: string;
+	startPoint?: string;
+	checkout?: boolean;
+}
+
+export interface GitBranchCreateResponse { ok: true; branch: string; checkedOut: boolean }
+
+export interface GitBranchDeleteRequest {
+	cwd: string;
+	name: string;
+	force?: boolean;
+	confirm?: boolean;
+}
+
+export interface GitBranchRenameRequest {
+	cwd: string;
+	oldName: string;
+	newName: string;
+}
+
+export interface GitBranchRenameResponse { ok: true; name: string }
+
+export interface GitCheckoutRequest {
+	cwd: string;
+	branch: string;
+	/** Auto-stash + restore if the working tree is dirty. Default true. */
+	autoStash?: boolean;
+}
+
+export interface GitLogRequest {
+	cwd: string;
+	maxCount?: number;
+	from?: string;
+	to?: string;
+	path?: string;
+	cursor?: string;
+}
+
+export interface GitCommitInfo {
+	sha: string;
+	shortSha: string;
+	author: string;
+	email: string;
+	/** ISO timestamp. */
+	date: string;
+	subject: string;
+	body: string;
+	insertions: number;
+	deletions: number;
+	files: number;
+}
+
+export interface GitLogResponse {
+	ok: true;
+	commits: GitCommitInfo[];
+	nextCursor?: string;
+	total?: number;
+}
+
+export interface GitCommitFilesResponse {
+	ok: true;
+	commit: GitCommitInfo;
+	files: { path: string; insertions: number; deletions: number; isBinary: boolean }[];
+}
+
+export interface GitStashEntry {
+	ref: string;
+	index: number;
+	subject: string;
+	sha: string;
+	relativeTime: string;
+	branch: string;
+}
+
+export interface GitStashListResponse { ok: true; entries: GitStashEntry[] }
+
+export interface GitStashPushRequest {
+	cwd: string;
+	message?: string;
+	paths?: string[];
+	/** Include untracked files; default true. */
+	includeUntracked?: boolean;
+}
+
+export interface GitStashApplyRequest { cwd: string; ref: string }
+export interface GitStashPopRequest   { cwd: string; ref: string }
+export interface GitStashDropRequest  { cwd: string; ref: string }
+
+export interface GitStashMutationResponse { ok: true; ref: string; conflicted?: boolean }
+
+export interface GitMergeRequest {
+	cwd: string;
+	branch: string;
+	/** Default false. When true, generate a merge commit even if FF is possible. */
+	noFf?: boolean;
+	message?: string;
+}
+
+export interface GitRebaseRequest {
+	cwd: string;
+	onto: string;
+}
+
+export interface GitMergeAbortRequest  { cwd: string }
+export interface GitRebaseAbortRequest { cwd: string }
+export interface GitMergeContinueRequest  { cwd: string; message?: string }
+export interface GitRebaseContinueRequest { cwd: string }
+
+export type GitConflictOperation = "merge" | "rebase" | "cherry-pick" | "revert";
+
+export interface GitConflictFile {
+	path: string;
+	oursLabel: string;
+	theirsLabel: string;
+	hunks: number;
+}
+
+export interface GitConflictDetails {
+	operation: GitConflictOperation;
+	head: string;
+	onto?: string;
+	files: GitConflictFile[];
+}
+
+export interface GitMutationOk   { ok: true; sha?: string }
+export interface GitMutationErr  { ok: false; error: string; conflicts?: GitConflictDetails }
+export type GitMutationResponse = GitMutationOk | GitMutationErr;
+
+export interface GitCherryPickRequest { cwd: string; sha: string; noCommit?: boolean }
+export interface GitRevertCommitRequest { cwd: string; sha: string; noCommit?: boolean }
+export interface GitResetRequest {
+	cwd: string;
+	sha: string;
+	mode: "soft" | "mixed" | "hard";
+	confirm?: boolean;
+}
+
+export interface GitWorktreeInfo {
+	path: string;
+	head: string;
+	branch: string;
+	isPrimary: boolean;
+	isLocked: boolean;
+}
+
+export interface GitWorktreesResponse { ok: true; worktrees: GitWorktreeInfo[] }
+
+export interface GitWorktreeCreateRequest {
+	cwd: string;
+	path: string;
+	mode: "new" | "existing";
+	branch?: string;
+	startRef?: string;
+	upstream?: { remote: string; branch: string };
+}
+
+export interface GitWorktreeCreateResponse {
+	ok: true;
+	head: string;
+	name: string;
+	branch: string;
+	path: string;
+}
+
+export interface GitWorktreeDeleteRequest {
+	cwd: string;
+	path: string;
+	/** Also delete the branch (only valid for non-primary worktrees). */
+	deleteBranch?: boolean;
+	confirm?: boolean;
+}
+
+export interface GitIdentity {
+	id: string;
+	userName: string;
+	userEmail: string;
+	authType: "https" | "ssh";
+	sshKeyPath?: string;
+	isGlobal: boolean;
+	/** ISO timestamp of last write. */
+	updatedAt: string;
+}
+
+export interface GitIdentitiesResponse { ok: true; identities: GitIdentity[] }
+
+export interface GitSetIdentityRequest {
+	cwd: string;
+	userName: string;
+	userEmail: string;
+	sshKeyPath?: string;
+}
+
+export interface GitGlobalIdentity {
+	userName: string | null;
+	userEmail: string | null;
+	sshCommand: string | null;
+}
+
+export interface GitRemoteInfo {
+	name: string;
+	fetchUrl: string;
+	pushUrl: string;
+}
+
+export interface GitRemotesResponse { ok: true; remotes: GitRemoteInfo[] }
+
+export interface GitAddRemoteRequest {
+	cwd: string;
+	name: string;
+	url: string;
+}
+
+export interface GitRemoveRemoteRequest { cwd: string; name: string }
+export interface GitDeleteRemoteBranchRequest {
+	cwd: string;
+	branch: string;
+	remote?: string;
+}
+
+export interface GitCheckOk { ok: true; isRepo: boolean; toplevel?: string }
+export interface GitCheckErr { ok: false; error: string }
+export type GitCheckResponse = GitCheckOk | GitCheckErr;
+
+export interface GitToplevelResponse { ok: true; toplevel: string | null }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Models and providers

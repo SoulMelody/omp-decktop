@@ -6,6 +6,7 @@ import * as path from "node:path";
 import type { Config } from "./config.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
 import { SkillsService } from "./skills-service.ts";
+import { makeTestConfig } from "./test-config.ts";
 
 let workdir: string | null = null;
 const originalFetch = globalThis.fetch;
@@ -24,17 +25,11 @@ async function boot(): Promise<string> {
 }
 
 function makeConfig(defaultCwd: string): Config {
-	return {
-		host: "127.0.0.1",
-		port: 0,
+	return makeTestConfig({
 		defaultCwd,
-		extraWorkspaces: [],
-		devMode: true,
-		idleTimeoutMs: 0,
 		dbPath: path.join(defaultCwd, "deck.db"),
 		uploadsRoot: path.join(defaultCwd, "uploads"),
-		autoStartCommand: null,
-	};
+	});
 }
 
 function makeService(defaultCwd: string): SkillsService {

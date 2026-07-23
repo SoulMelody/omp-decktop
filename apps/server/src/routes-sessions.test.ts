@@ -10,6 +10,7 @@ import type { Config } from "./config.ts";
 import { closeDb, openDb } from "./db/index.ts";
 import { setWorkspacePreference } from "./db/workspace-preferences.ts";
 import { buildRouter } from "./routes.ts";
+import { makeTestConfig } from "./test-config.ts";
 
 let dbDir: string | null = null;
 
@@ -36,17 +37,12 @@ function model(provider: string, id: string): ModelRef {
 }
 
 function testConfig(root: string): Config {
-	return {
-		host: "127.0.0.1",
-		port: 0,
+	return makeTestConfig({
 		defaultCwd: path.join(root, "default-workspace"),
 		extraWorkspaces: [path.join(root, "extra-workspace")],
-		devMode: true,
-		idleTimeoutMs: 0,
 		dbPath: path.join(root, "deck.db"),
 		uploadsRoot: path.join(root, "uploads"),
-		autoStartCommand: null,
-	};
+	});
 }
 
 function noopService<T>(): T {

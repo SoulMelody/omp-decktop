@@ -3,24 +3,12 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Config } from "./config.ts";
 import { buildFsReadRouter } from "./routes-fs-read.ts";
+import { makeTestConfig } from "./test-config.ts";
 type TreeEntry = { name: string; path: string; isDir: boolean };
 type TreeResponse = { ok: true; entries: TreeEntry[] } | { ok: false; error: string };
 
-function testConfig(root: string): Config {
-	return {
-		host: "127.0.0.1",
-		port: 0,
-		defaultCwd: root,
-		extraWorkspaces: [],
-		devMode: true,
-		idleTimeoutMs: 0,
-		dbPath: join(root, "deck.db"),
-		uploadsRoot: join(root, "uploads"),
-		autoStartCommand: null,
-	};
-}
+const testConfig = (root: string) => makeTestConfig({ defaultCwd: root });
 
 describe("/fs/tree", () => {
 	let root: string;

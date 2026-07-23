@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omp-deck.app/schemas/fs-ops.json",
+  "title": "FileOperations",
+  "description": "Per-request JSON Schemas for /fs/* write/manage endpoints. Each definition is registered under its `$id` so the validator can compile it on demand.",
+  "type": "object",
+  "$defs": {
+    "FsAnchoredRequest": {
+      "type": "object",
+      "required": ["cwd", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute workspace root the operation is anchored to."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to cwd using forward slashes."
+        },
+        "grantToken": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional grant token authorizing a write outside the workspace roots. Required when the resolved target is outside any allowed root."
+        }
+      }
+    },
+    "FsMkdirRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/FsAnchoredRequest" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recursive": { "type": "boolean", "default": true }
+          }
+        }
+      ]
+    },
+    "FsWriteRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/FsAnchoredRequest" },
+        {
+          "type": "object",
+          "required": ["content"],
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "description": "File content. UTF-8 by default; pass base64 + encoding:'base64' for binary."
+            },
+            "encoding": {
+              "type": "string",
+              "enum": ["utf-8", "base64"],
+              "default": "utf-8"
+            },
+            "expectedSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "description": "If supplied, the server refuses with 409 stale when the file's sha256 changed since this value."
+            }
+          }
+        }
+      ]
+    },
+    "FsRenameRequest": {
+      "type": "object",
+      "required": ["cwd", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "from":    { "type": "string", "minLength": 1 },
+        "to":      { "type": "string", "minLength": 1 },
+        "overwrite": { "type": "boolean", "default": false },
+        "grantToken": { "type": "string", "minLength": 1 }
+      }
+    },
+    "FsDeleteRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/FsAnchoredRequest" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recursive": { "type": "boolean", "default": false }
+          }
+        }
+      ]
+    },
+    "FsRevealRequest": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "via": { "type": "string", "enum": ["browser", "desktop"] }
+      }
+    },
+    "FsSearchRequest": {
+      "type": "object",
+      "required": ["cwd", "q"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "q":   { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "enum": ["file", "directory", "all"], "default": "file" },
+        "dirs": { "type": "boolean", "default": false },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 },
+        "respectGitignore": { "type": "boolean", "default": true }
+      }
+    },
+    "FsCloneRequest": {
+      "type": "object",
+      "required": ["cwd", "remoteUrl", "destinationPath"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "remoteUrl": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(https?://|git@|ssh://|git://).+"
+        },
+        "destinationPath": { "type": "string", "minLength": 1 },
+        "identityId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "FsExecRequest": {
+      "type": "object",
+      "required": ["cwd", "cmd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "cmd": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 64
+        },
+        "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 600000, "default": 30000 },
+        "label": { "type": "string", "maxLength": 128 }
+      }
+    },
+    "FsIssueGrantRequest": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "ttlMs": { "type": "integer", "minimum": 1000, "maximum": 600000, "default": 60000 },
+        "reason": { "type": "string", "maxLength": 256 }
+      }
+    },
+    "FsEditorOpenRequest": {
+      "type": "object",
+      "required": ["cwd", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":  { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

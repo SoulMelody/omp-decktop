@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import * as path from "node:path";
 
 import type { InstallSkillFromNpmRequest, InstallSkillFromNpmResponse } from "@omp-deck/protocol";
 
-import type { Config } from "./config.ts";
 import { MarketplaceService } from "./marketplace-service.ts";
 import { buildSkillsRouter } from "./routes-skills.ts";
 import { SkillsService } from "./skills-service.ts";
+import { makeTestConfig } from "./test-config.ts";
 
 function installError(message: string, status: number): Error & { status: number } {
 	const err = new Error(message) as Error & { status: number };
@@ -14,17 +13,7 @@ function installError(message: string, status: number): Error & { status: number
 	return err;
 }
 
-const TEST_CONFIG: Config = {
-	host: "127.0.0.1",
-	port: 0,
-	defaultCwd: path.resolve("."),
-	extraWorkspaces: [],
-	devMode: true,
-	idleTimeoutMs: 0,
-	dbPath: path.resolve("deck.db"),
-	uploadsRoot: path.resolve("uploads"),
-	autoStartCommand: null,
-};
+const TEST_CONFIG = makeTestConfig();
 
 class InstallOnlySkillsService extends SkillsService {
 	constructor(private readonly install: (req: InstallSkillFromNpmRequest) => Promise<InstallSkillFromNpmResponse>) {

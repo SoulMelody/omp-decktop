@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omp-deck.app/schemas/git-ops.json",
+  "title": "GitOperations",
+  "description": "Per-request JSON Schemas for /git/* endpoints. Each definition is registered under its `$id` so the validator can compile it on demand.",
+  "type": "object",
+  "$defs": {
+    "GitStageRequest": {
+      "type": "object",
+      "required": ["cwd", "paths"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":   { "type": "string", "minLength": 1 },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "GitRevertRequest": {
+      "type": "object",
+      "required": ["cwd", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":  { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "enum": ["all", "working"], "default": "working" },
+        "confirm": { "type": "boolean", "default": false }
+      }
+    },
+    "GitCommitRequest": {
+      "type": "object",
+      "required": ["cwd", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "stageFiles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 1000
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 1000
+        },
+        "signOff":   { "type": "boolean", "default": false },
+        "pushAfter": { "type": "boolean", "default": false }
+      }
+    },
+    "GitPushRequest": {
+      "type": "object",
+      "required": ["cwd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "remote":  { "type": "string", "minLength": 1 },
+        "branch":  { "type": "string", "minLength": 1 },
+        "force":   { "type": "string", "enum": ["lease", "no"], "default": "no" },
+        "confirm": { "type": "boolean", "default": false }
+      }
+    },
+    "GitPullRequest": {
+      "type": "object",
+      "required": ["cwd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":    { "type": "string", "minLength": 1 },
+        "remote": { "type": "string", "minLength": 1 },
+        "branch": { "type": "string", "minLength": 1 },
+        "rebase": { "type": "boolean", "default": false },
+        "allowMergeCommit": { "type": "boolean", "default": false }
+      }
+    },
+    "GitFetchRequest": {
+      "type": "object",
+      "required": ["cwd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":      { "type": "string", "minLength": 1 },
+        "remote":   { "type": "string", "minLength": 1 },
+        "prune":    { "type": "boolean", "default": true },
+        "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 600000, "default": 60000 }
+      }
+    },
+    "GitBranchCreateRequest": {
+      "type": "object",
+      "required": ["cwd", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":       { "type": "string", "minLength": 1 },
+        "name":      { "type": "string", "minLength": 1, "maxLength": 255 },
+        "startPoint": { "type": "string", "minLength": 1 },
+        "checkout":  { "type": "boolean", "default": true }
+      }
+    },
+    "GitBranchDeleteRequest": {
+      "type": "object",
+      "required": ["cwd", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":    { "type": "string", "minLength": 1 },
+        "name":   { "type": "string", "minLength": 1 },
+        "force":  { "type": "boolean", "default": false },
+        "confirm": { "type": "boolean", "default": false }
+      }
+    },
+    "GitBranchRenameRequest": {
+      "type": "object",
+      "required": ["cwd", "oldName", "newName"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "oldName": { "type": "string", "minLength": 1 },
+        "newName": { "type": "string", "minLength": 1, "maxLength": 255 }
+      }
+    },
+    "GitCheckoutRequest": {
+      "type": "object",
+      "required": ["cwd", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":      { "type": "string", "minLength": 1 },
+        "branch":   { "type": "string", "minLength": 1 },
+        "autoStash": { "type": "boolean", "default": true }
+      }
+    },
+    "GitLogRequest": {
+      "type": "object",
+      "required": ["cwd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":      { "type": "string", "minLength": 1 },
+        "maxCount": { "type": "integer", "minimum": 1, "maximum": 500, "default": 50 },
+        "from":     { "type": "string", "minLength": 1 },
+        "to":       { "type": "string", "minLength": 1 },
+        "path":     { "type": "string", "minLength": 1 },
+        "cursor":   { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitStashPushRequest": {
+      "type": "object",
+      "required": ["cwd"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "maxLength": 1024 },
+        "paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 1000
+        },
+        "includeUntracked": { "type": "boolean", "default": true }
+      }
+    },
+    "GitStashApplyRequest": {
+      "type": "object",
+      "required": ["cwd", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitMergeRequest": {
+      "type": "object",
+      "required": ["cwd", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":    { "type": "string", "minLength": 1 },
+        "branch": { "type": "string", "minLength": 1 },
+        "noFf":   { "type": "boolean", "default": false },
+        "message": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "GitRebaseRequest": {
+      "type": "object",
+      "required": ["cwd", "onto"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":  { "type": "string", "minLength": 1 },
+        "onto": { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitCherryPickRequest": {
+      "type": "object",
+      "required": ["cwd", "sha"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "sha": { "type": "string", "minLength": 7, "maxLength": 64 },
+        "noCommit": { "type": "boolean", "default": false }
+      }
+    },
+    "GitRevertCommitRequest": {
+      "type": "object",
+      "required": ["cwd", "sha"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd": { "type": "string", "minLength": 1 },
+        "sha": { "type": "string", "minLength": 7, "maxLength": 64 },
+        "noCommit": { "type": "boolean", "default": false }
+      }
+    },
+    "GitResetRequest": {
+      "type": "object",
+      "required": ["cwd", "sha", "mode"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":     { "type": "string", "minLength": 1 },
+        "sha":     { "type": "string", "minLength": 7, "maxLength": 64 },
+        "mode":    { "type": "string", "enum": ["soft", "mixed", "hard"] },
+        "confirm": { "type": "boolean", "default": false }
+      }
+    },
+    "GitWorktreeCreateRequest": {
+      "type": "object",
+      "required": ["cwd", "path", "mode"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":   { "type": "string", "minLength": 1 },
+        "path":  { "type": "string", "minLength": 1 },
+        "mode":  { "type": "string", "enum": ["new", "existing"] },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "startRef": { "type": "string", "minLength": 1 },
+        "upstream": {
+          "type": "object",
+          "required": ["remote", "branch"],
+          "additionalProperties": false,
+          "properties": {
+            "remote": { "type": "string", "minLength": 1 },
+            "branch": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "GitWorktreeDeleteRequest": {
+      "type": "object",
+      "required": ["cwd", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":   { "type": "string", "minLength": 1 },
+        "path":  { "type": "string", "minLength": 1 },
+        "deleteBranch": { "type": "boolean", "default": false },
+        "confirm": { "type": "boolean", "default": false }
+      }
+    },
+    "GitSetIdentityRequest": {
+      "type": "object",
+      "required": ["cwd", "userName", "userEmail"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":        { "type": "string", "minLength": 1 },
+        "userName":   { "type": "string", "minLength": 1, "maxLength": 256 },
+        "userEmail":  { "type": "string", "format": "email", "maxLength": 256 },
+        "sshKeyPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitAddRemoteRequest": {
+      "type": "object",
+      "required": ["cwd", "name", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":  { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "url":  { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitRemoveRemoteRequest": {
+      "type": "object",
+      "required": ["cwd", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":  { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "GitDeleteRemoteBranchRequest": {
+      "type": "object",
+      "required": ["cwd", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "cwd":    { "type": "string", "minLength": 1 },
+        "branch": { "type": "string", "minLength": 1 },
+        "remote": { "type": "string", "minLength": 1, "default": "origin" }
+      }
+    }
+  }
+}

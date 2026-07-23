@@ -27,6 +27,8 @@ import { buildInboxRouter } from "./routes-inbox.ts";
 import { buildUtilityRouter } from "./routes-cron.ts";
 import { buildSlashCommandsRouter } from "./routes-slash-commands.ts";
 import { buildFsRouter } from "./routes-fs.ts";
+import { buildFsOpsRouter } from "./routes-fs-ops.ts";
+import { buildGitRouter } from "./git/git-routes.ts";
 import { buildBridgesRouter } from "./routes-bridges.ts";
 import { buildMarketplaceRouter } from "./routes-marketplace.ts";
 import { buildSkillsRouter } from "./routes-skills.ts";
@@ -388,6 +390,8 @@ export function buildRouter(
 	app.route("/", buildSlashCommandsRouter());
 	app.route("/", buildFsRouter(config));
 	app.route("/", buildFsReadRouter(config));
+	app.route("/", buildFsOpsRouter(config));
+	app.route("/", buildGitRouter(config));
 	app.route("/", buildSettingsRouter(bridge, config, opts));
 	app.route("/", buildOrientationRouter());
 	app.route("/", buildBridgesRouter(supervisor));

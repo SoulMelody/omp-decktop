@@ -27,6 +27,8 @@ import triggerCronSchema from "./schemas/trigger-cron.json";
 import triggerEventSchema from "./schemas/trigger-event.json";
 import triggerManualSchema from "./schemas/trigger-manual.json";
 import triggerWebhookSchema from "./schemas/trigger-webhook.json";
+import fsOpsSchema from "./schemas/fs-ops.json";
+import gitOpsSchema from "./schemas/git-ops.json";
 
 export interface ValidationError {
 	/** JSON Pointer to the offending node (Ajv's `instancePath`). */
@@ -60,7 +62,187 @@ const SUB_SCHEMAS = [
 	triggerManualSchema,
 	triggerEventSchema,
 	routineLayoutSchema,
+	fsOpsSchema,
+	gitOpsSchema,
 ] as const;
+
+/**
+ * Compiled per-endpoint validators. Each key is the `endpoint name` used
+ * by the server routes; each value is the compiled Ajv validator for that
+ * request shape. Compiled lazily on first use to keep the cold-start cost
+ * low — only the routine-spec validator is compiled eagerly because the
+ * builder UI relies on it for visual rendering.
+ */
+type EndpointName =
+	| "fs.mkdir"
+	| "fs.write"
+	| "fs.rename"
+	| "fs.delete"
+	| "fs.reveal"
+	| "fs.search"
+	| "fs.clone"
+	| "fs.exec"
+	| "fs.grant"
+	| "fs.editor.open"
+	| "git.stage"
+	| "git.revert"
+	| "git.commit"
+	| "git.push"
+	| "git.pull"
+	| "git.fetch"
+	| "git.branch.create"
+	| "git.branch.delete"
+	| "git.branch.rename"
+	| "git.checkout"
+	| "git.log"
+	| "git.stash.push"
+	| "git.stash.apply"
+	| "git.merge"
+	| "git.rebase"
+	| "git.cherryPick"
+	| "git.revertCommit"
+	| "git.reset"
+	| "git.worktree.create"
+	| "git.worktree.delete"
+	| "git.setIdentity"
+	| "git.remote.add"
+	| "git.remote.remove"
+	| "git.remote.deleteBranch";
+
+const ENDPOINT_SCHEMAS: Record<EndpointName, { schema: unknown; def: string }> = {
+	"fs.mkdir":              { schema: fsOpsSchema,    def: "FsMkdirRequest" },
+	"fs.write":              { schema: fsOpsSchema,    def: "FsWriteRequest" },
+	"fs.rename":             { schema: fsOpsSchema,    def: "FsRenameRequest" },
+	"fs.delete":             { schema: fsOpsSchema,    def: "FsDeleteRequest" },
+	"fs.reveal":             { schema: fsOpsSchema,    def: "FsRevealRequest" },
+	"fs.search":             { schema: fsOpsSchema,    def: "FsSearchRequest" },
+	"fs.clone":              { schema: fsOpsSchema,    def: "FsCloneRequest" },
+	"fs.exec":               { schema: fsOpsSchema,    def: "FsExecRequest" },
+	"fs.grant":              { schema: fsOpsSchema,    def: "FsIssueGrantRequest" },
+	"fs.editor.open":        { schema: fsOpsSchema,    def: "FsEditorOpenRequest" },
+	"git.stage":             { schema: gitOpsSchema,   def: "GitStageRequest" },
+	"git.revert":            { schema: gitOpsSchema,   def: "GitRevertRequest" },
+	"git.commit":            { schema: gitOpsSchema,   def: "GitCommitRequest" },
+	"git.push":              { schema: gitOpsSchema,   def: "GitPushRequest" },
+	"git.pull":              { schema: gitOpsSchema,   def: "GitPullRequest" },
+	"git.fetch":             { schema: gitOpsSchema,   def: "GitFetchRequest" },
+	"git.branch.create":     { schema: gitOpsSchema,   def: "GitBranchCreateRequest" },
+	"git.branch.delete":     { schema: gitOpsSchema,   def: "GitBranchDeleteRequest" },
+	"git.branch.rename":     { schema: gitOpsSchema,   def: "GitBranchRenameRequest" },
+	"git.checkout":          { schema: gitOpsSchema,   def: "GitCheckoutRequest" },
+	"git.log":               { schema: gitOpsSchema,   def: "GitLogRequest" },
+	"git.stash.push":        { schema: gitOpsSchema,   def: "GitStashPushRequest" },
+	"git.stash.apply":       { schema: gitOpsSchema,   def: "GitStashApplyRequest" },
+	"git.merge":             { schema: gitOpsSchema,   def: "GitMergeRequest" },
+	"git.rebase":            { schema: gitOpsSchema,   def: "GitRebaseRequest" },
+	"git.cherryPick":        { schema: gitOpsSchema,   def: "GitCherryPickRequest" },
+	"git.revertCommit":      { schema: gitOpsSchema,   def: "GitRevertCommitRequest" },
+	"git.reset":             { schema: gitOpsSchema,   def: "GitResetRequest" },
+	"git.worktree.create":   { schema: gitOpsSchema,   def: "GitWorktreeCreateRequest" },
+	"git.worktree.delete":   { schema: gitOpsSchema,   def: "GitWorktreeDeleteRequest" },
+	"git.setIdentity":       { schema: gitOpsSchema,   def: "GitSetIdentityRequest" },
+	"git.remote.add":        { schema: gitOpsSchema,   def: "GitAddRemoteRequest" },
+	"git.remote.remove":     { schema: gitOpsSchema,   def: "GitRemoveRemoteRequest" },
+	"git.remote.deleteBranch": { schema: gitOpsSchema, def: "GitDeleteRemoteBranchRequest" },
+};
+
+let cachedEndpointValidators: Map<EndpointName, (input: unknown) => boolean> | null = null;
+
+function compileEndpoint(name: EndpointName): (input: unknown) => boolean {
+	const { ajv } = getValidator();
+	const meta = ENDPOINT_SCHEMAS[name];
+	const schemaObj = meta.schema as { $defs?: Record<string, unknown> };
+	const def = schemaObj.$defs?.[meta.def];
+	if (!def) {
+		throw new Error(`Validator schema definition ${meta.def} not found`);
+	}
+	// Strip `allOf` and `$ref` references so the endpoint validator is a
+	// single self-contained schema that Ajv can compile in isolation.
+	const flattened = flattenAllOf(def);
+	const standalone = {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		type: "object",
+		...flattened,
+	};
+	return ajv.compile(standalone) as (input: unknown) => boolean;
+}
+
+/**
+ * Inline every `$ref: "#/$defs/X"` and merge `allOf` siblings so the
+ * resulting schema has no external references. This trades a tiny bit of
+ * duplication for a robust validator that doesn't depend on Ajv's
+ * cross-schema resolution at compile time. `properties` objects are
+ * deep-merged so that combining `{ properties: { cwd, path } }` with
+ * `{ properties: { recursive } }` produces `{ properties: { cwd, path, recursive } }`.
+ */
+function flattenAllOf(node: unknown): Record<string, unknown> {
+	if (!node || typeof node !== "object") return {};
+	const out: Record<string, unknown> = {};
+	const obj = node as Record<string, unknown>;
+	for (const [k, v] of Object.entries(obj)) {
+		if (k === "allOf" && Array.isArray(v)) {
+			for (const part of v) {
+				deepMerge(out, flattenAllOf(part));
+			}
+			continue;
+		}
+		if (k === "$ref" && typeof v === "string") {
+			const m = v.match(/^#\/\$defs\/(.+)$/);
+			if (m) {
+				const schemaObj = (ENDPOINT_SCHEMAS as Record<string, { schema: { $defs?: Record<string, unknown> } }>);
+				for (const meta of Object.values(schemaObj)) {
+					const ref = meta.schema.$defs?.[m[1]!];
+					if (ref) {
+						deepMerge(out, flattenAllOf(ref));
+						break;
+					}
+				}
+				continue;
+			}
+		}
+		out[k] = v;
+	}
+	return out;
+}
+
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
+	for (const [k, v] of Object.entries(source)) {
+		const existing = target[k];
+		if (
+			existing && typeof existing === "object" && !Array.isArray(existing) &&
+			v && typeof v === "object" && !Array.isArray(v)
+		) {
+			deepMerge(existing as Record<string, unknown>, v as Record<string, unknown>);
+		} else {
+			target[k] = v;
+		}
+	}
+}
+
+function getEndpointValidators(): Map<EndpointName, (input: unknown) => boolean> {
+	if (cachedEndpointValidators) return cachedEndpointValidators;
+	const map = new Map<EndpointName, (input: unknown) => boolean>();
+	for (const name of Object.keys(ENDPOINT_SCHEMAS) as EndpointName[]) {
+		map.set(name, compileEndpoint(name));
+	}
+	cachedEndpointValidators = map;
+	return map;
+}
+
+/**
+ * Validate a request body for one of the file/git operation endpoints.
+ * Returns Ajv errors as `ValidationError[]` so the server can map them to
+ * 400 responses with a stable shape.
+ */
+export function validateEndpointRequest(name: EndpointName, input: unknown): ValidationResult {
+	const validators = getEndpointValidators();
+	const validate = validators.get(name);
+	if (!validate) return { valid: false, errors: [{ path: "/", keyword: "unknownEndpoint", message: `unknown endpoint ${name}`, params: {} }] };
+	const ok = validate(input);
+	if (ok) return { valid: true };
+	const errors = (validate as unknown as { errors?: ErrorObject[] | null }).errors;
+	return { valid: false, errors: normalizeErrors(errors) };
+}
 
 let cachedValidator: ((spec: unknown) => boolean) | null = null;
 let cachedAjv: Ajv2020 | null = null;

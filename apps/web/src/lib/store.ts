@@ -523,6 +523,12 @@ interface StoreState {
 	markNotificationDelivered(id: string): void;
 	/** Hide an in-app toast for a notification (does not affect an already-delivered OS notif). */
 	dismissNotification(id: string): void;
+	/**
+	 * Push a client-side notification into the same queue that the server-
+	 * driven frames use. Useful for surfacing local errors (failed fs ops,
+	 * git failures) without round-tripping through the server.
+	 */
+	pushLocalNotification(input: { level: NotificationLevel; title: string; body?: string }): string;
 }
 
 export function selectCurrentWorkspaceCwd(state: Pick<StoreState, "selectedWorkspaceCwd" | "defaultCwd">): string {
@@ -956,6 +962,27 @@ export const useStore = create<StoreState>()(
 				next[i] = { ...target, dismissed: true };
 				return { notifications: next };
 			});
+		},
+
+		pushLocalNotification({ level, title, body }) {
+			const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			const now = new Date().toISOString();
+			const item: NotificationItem = {
+				id,
+				level,
+				title,
+				body,
+				timestamp: now,
+				receivedAtMs: Date.now(),
+				deliveredOs: false,
+				dismissed: false,
+			};
+			set((s) => {
+				const next = [...s.notifications, item];
+				if (next.length > MAX_NOTIFICATIONS) next.splice(0, next.length - MAX_NOTIFICATIONS);
+				return { notifications: next };
+			});
+			return id;
 		},
 	})),
 );
