@@ -40,6 +40,42 @@ import type {
 	GitWorktreeInfo,
 } from "@omp-deck/protocol";
 
+/**
+ * Decode git's C-style quoting of paths. Git wraps paths in double-quotes
+ * and escapes non-ASCII bytes as octal (\NNN) when `core.quotepath` is true
+ * or the locale is C. With `-c core.quotepath=false` in runGit this is
+ * mostly suppressed, but we decode defensively for any remaining quoted
+ * output (e.g. paths with special chars that git always quotes).
+ */
+function unquoteGitPath(raw: string): string {
+	if (!raw.startsWith('"')) return raw;
+	// Strip surrounding quotes
+	let s = raw.slice(1, -1);
+	// Decode octal escapes \NNN → byte, then decode as UTF-8
+	const bytes: number[] = [];
+	for (let i = 0; i < s.length; i++) {
+		if (s[i] === "\\" && i + 3 < s.length && /[0-7]/.test(s[i + 1]!) && /[0-7]/.test(s[i + 2]!) && /[0-7]/.test(s[i + 3]!)) {
+			bytes.push(parseInt(s.slice(i + 1, i + 4), 8));
+			i += 3;
+		} else if (s[i] === "\\" && i + 1 < s.length) {
+			// Other C-style escapes: \n \t \\ \" etc.
+			const c = s[i + 1]!;
+			if (c === "n") { bytes.push(0x0a); i++; }
+			else if (c === "t") { bytes.push(0x09); i++; }
+			else if (c === "\\") { bytes.push(0x5c); i++; }
+			else if (c === '"') { bytes.push(0x22); i++; }
+			else if (c === "a") { bytes.push(0x07); i++; }
+			else if (c === "b") { bytes.push(0x08); i++; }
+			else if (c === "f") { bytes.push(0x0c); i++; }
+			else if (c === "r") { bytes.push(0x0d); i++; }
+			else { bytes.push(s.charCodeAt(i)); }
+		} else {
+			bytes.push(s.charCodeAt(i));
+		}
+	}
+	return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+}
+
 // ─── Repository detection ──────────────────────────────────────────────────
 
 export async function isGitRepository(cwd: string): Promise<boolean> {
@@ -108,15 +144,15 @@ function parseStatus(cwd: string, raw: string): GitStatusResponse {
 		}
 		if (head === "?") {
 			// untracked
-			const path = line.slice(2);
-			files.push({ path, index: " ", workingDir: "?" });
+			const p = unquoteGitPath(line.slice(2));
+			files.push({ path: p, index: " ", workingDir: "?" });
 			continue;
 		}
 		if (head === "u") {
 			// "u XY sub m1 m2 m3 mW h1 h2 h3 <path>"
 			const parts = line.split(" ");
 			if (parts.length < 11) continue;
-			const filePath = parts.slice(10).join(" ");
+			const filePath = unquoteGitPath(parts.slice(10).join(" "));
 			files.push({ path: filePath, index: "U", workingDir: "U" });
 			continue;
 		}
@@ -130,8 +166,8 @@ function parseStatus(cwd: string, raw: string): GitStatusResponse {
 			const xy = parts[1] ?? "  ";
 			const index = (xy[0] === "." ? " " : (xy[0] ?? " "));
 			const workingDir = (xy[1] === "." ? " " : (xy[1] ?? " "));
-			const path = parts.slice(8).join(" ");
-			files.push({ path, index: index as GitStatusFile["index"], workingDir: workingDir as GitStatusFile["workingDir"] });
+			const p = unquoteGitPath(parts.slice(8).join(" "));
+			files.push({ path: p, index: index as GitStatusFile["index"], workingDir: workingDir as GitStatusFile["workingDir"] });
 		} else if (head === "2") {
 			// renamed/copied: "2 XY sub mH mI mW hH hI X<score> <path>"
 			const parts = line.split(" ");
@@ -139,8 +175,10 @@ function parseStatus(cwd: string, raw: string): GitStatusResponse {
 			const xy = parts[1] ?? "  ";
 			const index = (xy[0] === "." ? " " : (xy[0] ?? " "));
 			const workingDir = (xy[1] === "." ? " " : (xy[1] ?? " "));
-			const path = parts.slice(9).join(" ");
-			files.push({ path, index: index as GitStatusFile["index"], workingDir: workingDir as GitStatusFile["workingDir"] });
+			const raw = parts.slice(9).join(" ");
+			// Rename path field is "newPath\toldPath" — take only the new (working-tree) path.
+			const p = unquoteGitPath(raw.includes("\t") ? raw.split("\t")[0]! : raw);
+			files.push({ path: p, index: index as GitStatusFile["index"], workingDir: workingDir as GitStatusFile["workingDir"] });
 		}
 	}
 	return {
@@ -431,7 +469,7 @@ export async function getCommitFiles(cwd: string, sha: string): Promise<{ files:
 		if (!m) continue;
 		const ins = m[1] === "-" ? 0 : Number(m[1]);
 		const del = m[2] === "-" ? 0 : Number(m[2]);
-		files.push({ path: m[3]!, insertions: ins, deletions: del, isBinary: m[1] === "-" && m[2] === "-" });
+		files.push({ path: unquoteGitPath(m[3]!), insertions: ins, deletions: del, isBinary: m[1] === "-" && m[2] === "-" });
 	}
 	return { files };
 }
@@ -802,11 +840,11 @@ async function backUpUnrelatedIndex(cwd: string, keepFiles: string[]): Promise<s
 	const unrelated: string[] = [];
 	for (const line of statusRes.stdout.split("\n")) {
 		if (!line) continue;
-		const path = line.slice(3);
-		if (!keepFiles.includes(path)) {
+		const p = unquoteGitPath(line.slice(3));
+		if (!keepFiles.includes(p)) {
 			const code = line.slice(0, 2);
 			// Only "index != ' '" means staged.
-			if (code[0] !== " ") unrelated.push(path);
+			if (code[0] !== " ") unrelated.push(p);
 		}
 	}
 	if (unrelated.length === 0) return null;

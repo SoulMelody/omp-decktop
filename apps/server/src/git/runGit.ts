@@ -81,7 +81,7 @@ export function runGit(opts: RunGitOptions): Promise<RunGitResult> {
 		const timeoutMs = clampTimeout(opts.timeoutMs);
 		const env = buildEnv(opts.env);
 
-		const proc = spawn("git", opts.args, {
+		const proc = spawn("git", ["-c", "core.quotepath=false", ...opts.args], {
 			cwd: opts.cwd,
 			env,
 			stdio: ["pipe", "pipe", "pipe"],

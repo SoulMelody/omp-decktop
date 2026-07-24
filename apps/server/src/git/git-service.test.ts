@@ -317,3 +317,13 @@ describe("mutation lock", () => {
 		expect(b?.index).toBe("A");
 	});
 });
+
+describe("UTF-8 paths", () => {
+	test("status reports non-ASCII filenames as readable UTF-8, not octal escapes", async () => {
+		writeFile(repo.root, "中文文件.txt", "hello");
+		writeFile(repo.root, "nested/日本語.md", "world");
+		const status = await getStatus(repo.root);
+		expect(status.files.find((f) => f.path === "中文文件.txt")).toMatchObject({ workingDir: "?" });
+		expect(status.files.find((f) => f.path === "nested/日本語.md")).toMatchObject({ workingDir: "?" });
+	});
+});
